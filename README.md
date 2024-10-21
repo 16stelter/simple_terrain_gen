@@ -8,7 +8,7 @@ Laplacian smoothing can be used to smoothen the terrain further.
 
 ## Requirements
 
-This package requires CGAL-6.0 or later to be available. Place the library in the resources folder.
+This package requires CGAL-6.0 or later to run. Place the library in the resources folder.
 
 ## How to use
 
