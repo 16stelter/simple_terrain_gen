@@ -63,7 +63,6 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
         double min_z = std::max(zi - max_height_diff, zj - max_height_diff);
         z = min_z + (max_z - min_z) * static_cast<double>(rand()) / RAND_MAX;
       }
-      RCLCPP_INFO(node_->get_logger(), "p: %f", z);
       Point p(i, j, z);
       vertices.push_back(mesh.add_vertex(p));
     }
@@ -104,7 +103,19 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
     }
   }
 
-  CGAL::draw(mesh);
+  if (request->file_path == "")
+  {
+    RCLCPP_WARN(node_->get_logger(), "I don't know where you want the file to be saved as file_path is not defined. Showing rendering instead.");
+    CGAL::draw(mesh);
+    response->success = true;
+  }
+  else
+  {
+    std::ofstream output(request->file_path);
+    CGAL::IO::write_STL(output, mesh);
+    output.close();
+    response->success = true;
+  }
 }
 
 } //map_gen

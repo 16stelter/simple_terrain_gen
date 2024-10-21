@@ -7,6 +7,7 @@
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/IO/STL.h>
+#include <CGAL/boost/graph/IO/STL.h>
 #include <CGAL/draw_surface_mesh.h>
 #include <CGAL/Qt/Basic_viewer.h>
 #include <CGAL/Polygon_mesh_processing/angle_and_area_smoothing.h>
