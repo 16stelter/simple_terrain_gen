@@ -1,0 +1,10 @@
+string file_path
+int32 seed
+int32 size
+float32 max_slope
+int32 smoothing_iterations
+float32 smoothing_alpha
+
+---
+
+bool success
