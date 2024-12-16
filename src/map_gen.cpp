@@ -37,7 +37,7 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
       double z = 0;
       if(i==0 && j==0)
       {
-        z = static_cast <float> (rand()) / (static_cast <double> (RAND_MAX/100));
+        z = static_cast <float> (rand()) / (static_cast <double> (RAND_MAX));
       }
       else if (i==0)
       {
@@ -75,8 +75,8 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
       Mesh::Vertex_index v2 = vertices[(i + 1) * (request->size + 1) + j];
       Mesh::Vertex_index v3 = vertices[(i + 1) * (request->size + 1) + (j + 1)];
 
-      mesh.add_face(v0, v1, v2);
-      mesh.add_face(v1, v3, v2);
+      mesh.add_face(v0, v2, v1);
+      mesh.add_face(v1, v2, v3);
     }
   }
 
@@ -116,6 +116,7 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
     output.close();
     response->success = true;
   }
+  RCLCPP_INFO(node_->get_logger(), "Finished generating map.");
 }
 
 } //map_gen

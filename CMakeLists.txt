@@ -43,7 +43,9 @@ ament_target_dependencies(
   ament_index_cpp
 )
 
-rosidl_target_interfaces(MapGen ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+target_link_libraries(MapGen "${cpp_typesupport_target}")
+
 target_link_libraries(MapGen
                       rclcpp::rclcpp  
                       CGAL::CGAL 
