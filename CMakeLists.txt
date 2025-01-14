@@ -16,9 +16,12 @@ find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(CGAL REQUIRED COMPONENTS Qt6)
 find_package(ament_index_cpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GenerateMap.srv"
+  DEPENDENCIES 
+  sensor_msgs
 )
 
 include_directories(include 
@@ -29,11 +32,17 @@ include_directories(include
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 add_compile_options(-Wall -Werror -Wno-unused -fPIC)
 
-set(SOURCES
-  src/map_gen.cpp
-)
+add_executable(MapGen src/map_gen.cpp)
+add_executable(MapGenDepth src/map_gen_depth.cpp)
 
-add_executable(MapGen ${SOURCES})
+ament_target_dependencies(
+  MapGenDepth
+  sensor_msgs
+  ament_cmake
+  rclcpp
+  rosidl_default_runtime
+  ament_index_cpp
+)
 
 ament_target_dependencies(
   MapGen
@@ -45,6 +54,7 @@ ament_target_dependencies(
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 target_link_libraries(MapGen "${cpp_typesupport_target}")
+target_link_libraries(MapGenDepth "${cpp_typesupport_target}")
 
 target_link_libraries(MapGen
                       rclcpp::rclcpp  
@@ -54,7 +64,12 @@ target_link_libraries(MapGen
                       CGAL::CGAL_Basic_viewer
 )
 
+target_link_libraries(MapGenDepth
+                      rclcpp::rclcpp  
+)
+
 install(TARGETS MapGen DESTINATION lib/${PROJECT_NAME})
+install(TARGETS MapGenDepth DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY resources DESTINATION share/${PROJECT_NAME})
 
