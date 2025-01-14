@@ -66,6 +66,10 @@ target_link_libraries(MapGen
 
 target_link_libraries(MapGenDepth
                       rclcpp::rclcpp  
+                      CGAL::CGAL 
+                      Qt6::Core 
+                      Qt6::Widgets
+                      CGAL::CGAL_Basic_viewer
 )
 
 install(TARGETS MapGen DESTINATION lib/${PROJECT_NAME})
