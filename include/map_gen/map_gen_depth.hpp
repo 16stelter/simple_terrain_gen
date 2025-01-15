@@ -7,12 +7,14 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/Aff_transformation_3.h>
 #include <CGAL/IO/STL.h>
 #include <CGAL/draw_surface_mesh.h>
 #include <CGAL/Qt/Basic_viewer.h>
 
 typedef CGAL::Simple_cartesian<double> K;
 typedef K::Point_3 Point;
+typedef K::Aff_transformation_3 Transformation;
 typedef CGAL::Surface_mesh<Point> Mesh;
 
 namespace map_gen {

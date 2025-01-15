@@ -62,6 +62,9 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
     {
       //transform for each pixels xy coordinates based on z value and camera intrinsics
       float z = depth_data[y][x];
+      if(z < 1.0) {
+        z = 1.0;
+      }
       float X = (x - cx) * z / fx;
       float Y = (y - cy) * z / fy;
 
@@ -85,6 +88,18 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
       mesh.add_face(v1, v2, v3);
     }
   }
+  
+  //mesh is inverted and needs to be rotated
+  Transformation rotate_x_180(
+    1, 0, 0, 0,
+    0, -1, 0, 0,
+    0, 0, -1, 0,
+    1
+  );
+  for (auto v : mesh.vertices()) {
+        Point p = mesh.point(v);
+        mesh.point(v) = rotate_x_180.transform(p);
+    }
 
   if (request->file_path == "")
   {
