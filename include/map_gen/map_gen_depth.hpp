@@ -5,6 +5,10 @@
 #include "map_gen/srv/generate_map.hpp"
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Aff_transformation_3.h>
@@ -30,6 +34,8 @@ namespace map_gen {
             std::string camera_ns_;
             sensor_msgs::msg::Image depth_image_;
             std::array<double, 9> camera_intrinsics_;
+            tf2_ros::Buffer tf_buffer_;
+            tf2_ros::TransformListener tf_listener_;
             
             /*
             * Map generation service. Generates a map from the last received depth image.

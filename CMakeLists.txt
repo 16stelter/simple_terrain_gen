@@ -17,6 +17,9 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(CGAL REQUIRED COMPONENTS Qt6)
 find_package(ament_index_cpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GenerateMap.srv"
@@ -38,6 +41,9 @@ add_executable(MapGenDepth src/map_gen_depth.cpp)
 ament_target_dependencies(
   MapGenDepth
   sensor_msgs
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
   ament_cmake
   rclcpp
   rosidl_default_runtime

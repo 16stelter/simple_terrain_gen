@@ -5,7 +5,9 @@ namespace map_gen {
 MapGenDepth::MapGenDepth(rclcpp::Node::SharedPtr node, 
                                        const std::string &ns, 
                                        std::vector<rclcpp::Parameter> parameters)
-: node_(node)
+: node_(node),
+  tf_buffer_(node->get_clock()),
+  tf_listener_(tf_buffer_)
 {
   node_->declare_parameter<std::string>("camera_ns", "camera");
   node_->get_parameter("camera_ns", camera_ns_);
@@ -56,6 +58,20 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
   Mesh mesh;
   std::vector<Mesh::Vertex_index> vertices;
 
+  geometry_msgs::msg::TransformStamped transform_stamped;
+  bool use_transform = true;
+  tf2::Transform tf_transform = tf2::Transform::getIdentity();
+  try 
+  {
+    transform_stamped = tf_buffer_.lookupTransform("world", "camera_color_optical_frame", tf2::TimePointZero);
+    tf2::fromMsg(transform_stamped.transform, tf_transform);
+  } 
+  catch (tf2::TransformException &ex) 
+  {
+    use_transform = false;
+    RCLCPP_WARN(node_->get_logger(), "Transform error: %s", ex.what());
+  }
+
   for (int y = 0; y < int(depth_image_.height); y += step)
   {
     for (int x = 0; x < int(depth_image_.width); x += step)
@@ -68,8 +84,19 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
       float X = (x - cx) * z / fx;
       float Y = (y - cy) * z / fy;
 
-      Point p(X, Y, z);
-      vertices.push_back(mesh.add_vertex(p));
+      if (use_transform)
+      {
+        tf2::Vector3 point_camera(X, Y, z);
+        tf2::Vector3 point_world = tf_transform * point_camera;
+
+        Point p(point_world.x(), point_world.y(), point_world.z());
+        vertices.push_back(mesh.add_vertex(p));
+      }
+      else
+      {
+        Point p(X, Y, z);
+        vertices.push_back(mesh.add_vertex(p));
+      }
     }
   }
 
