@@ -14,7 +14,6 @@ MapGenDepth::MapGenDepth(rclcpp::Node::SharedPtr node,
     "/map_gen_depth/generate_map", 
     std::bind(&MapGenDepth::generate_map, this, std::placeholders::_1, std::placeholders::_2)
   );
-
   depth_cam_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
     camera_ns_ + "/camera/aligned_depth_to_color/image_raw", 
     10, 
@@ -45,8 +44,8 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
     for (int x = 0; x < int(depth_image_.width); ++x)
     {
       int idx = (y * depth_image_.width + x) * 2;
-      uint16_t depth = depth_image_.data[idx] | (depth_image_.data[idx + 1] << 8);
-      depth_data[y][x] = static_cast<float>(depth) / 1000.0;
+      uint16_t depth = depth_image_.data[idx] | (depth_image_.data[idx + 1] << 8); //uint8 to uint16
+      depth_data[y][x] = static_cast<float>(depth) / 1000.0; //mm to m
     }
   }
 
@@ -61,18 +60,17 @@ void MapGenDepth::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::
   {
     for (int x = 0; x < int(depth_image_.width); x += step)
     {
+      //transform for each pixels xy coordinates based on z value and camera intrinsics
       float z = depth_data[y][x];
       float X = (x - cx) * z / fx;
       float Y = (y - cy) * z / fy;
 
-      //add vertex with actual 3D coordinates
       Point p(X, Y, z);
       vertices.push_back(mesh.add_vertex(p));
     }
   }
 
-  int reduced_width = (depth_image_.width + step - 1) / step; // Width of reduced resolution
-
+  int reduced_width = (depth_image_.width + step - 1) / step;
   for (int y = 0; y < int(depth_image_.height / step) - 1; ++y)
   {
     for (int x = 0; x < int(depth_image_.width / step) - 1; ++x)

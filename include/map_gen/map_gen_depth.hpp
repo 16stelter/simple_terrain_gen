@@ -30,10 +30,18 @@ namespace map_gen {
             std::array<double, 9> camera_intrinsics_;
             
             /*
-            * Main function. Generates a map from the last received depth image.
+            * Map generation service. Generates a map from the last received depth image.
             */
             void generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Request> request, std::shared_ptr<map_gen::srv::GenerateMap::Response> response);
+
+            /*
+            * Callback for the depth image topic. Stores the last received depth image.
+            */
             void depth_image_cb(const sensor_msgs::msg::Image::SharedPtr msg);
+
+            /*
+            * Callback for the camera info topic. Stores the last received camera intrinsics.
+            */
             void camera_info_cb(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
     };
 } //map_gen
