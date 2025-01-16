@@ -13,7 +13,7 @@ MapGenDepth::MapGenDepth(rclcpp::Node::SharedPtr node,
   node_->get_parameter("camera_ns", camera_ns_);
 
   map_gen_service_ = node_->create_service<map_gen::srv::GenerateMap>(
-    "/map_gen_depth/generate_map", 
+    "/map_gen/generate_map", 
     std::bind(&MapGenDepth::generate_map, this, std::placeholders::_1, std::placeholders::_2)
   );
   depth_cam_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(

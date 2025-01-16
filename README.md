@@ -33,10 +33,6 @@ You can call the service using
 
 ```ros2 service call /map_gen/generate_map map_gen/srv/GenerateMap```
 
-or
-
-```ros2 service call /map_gen_depth/generate_map map_gen/srv/GenerateMap```
-
 You can specify the following parameters:
 
 * file_path - Location in which the stl file should be saved. If no file path is specified, defaults to just showing a rendering of the terrain instead.
