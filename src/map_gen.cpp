@@ -103,6 +103,30 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
     }
   }
 
+  Mesh steep_mesh;
+  std::map<Point, Mesh::Vertex_index> vertex_map;
+
+  for (const auto& f : mesh.faces()) {
+    Vector normal = CGAL::Polygon_mesh_processing::compute_face_normal(f, mesh);
+    double angle = std::acos(normal.z()) * 180 / M_PI;
+    if (angle > 15) {
+      auto h = mesh.halfedge(f);
+      std::vector<Mesh::Vertex_index> vs;
+
+      for (int i = 0; i < 3; ++i) {
+        Point p = mesh.point(mesh.target(h));
+        auto it = vertex_map.find(p);
+        if (it == vertex_map.end()) {
+          Mesh::Vertex_index idx = steep_mesh.add_vertex(p);
+          vertex_map[p] = idx;
+        }
+        vs.push_back(vertex_map[p]);
+        h = mesh.next(h); 
+      }
+      steep_mesh.add_face(vs);
+    }
+  }
+
   if (request->file_path == "")
   {
     RCLCPP_WARN(node_->get_logger(), "I don't know where you want the file to be saved as file_path is not defined. Showing rendering instead.");
@@ -111,13 +135,20 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   }
   else
   {
+    std::filesystem::path file(request->file_path);
+    std::ofstream output_steep(file.replace_extension(".steep.stl"));
     std::ofstream output(request->file_path);
+
     CGAL::IO::write_STL(output, mesh);
+    CGAL::IO::write_STL(output_steep, steep_mesh);
     output.close();
+    output_steep.close();
     response->success = true;
   }
   RCLCPP_INFO(node_->get_logger(), "Finished generating map.");
 }
+
+
 
 } //map_gen
 

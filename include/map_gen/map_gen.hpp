@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include "map_gen/srv/generate_map.hpp"
+#include <filesystem>
 
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
@@ -14,8 +15,9 @@
 #include <CGAL/Polygon_mesh_processing/fair.h>
 
 typedef CGAL::Simple_cartesian<double> K;
-typedef K::Point_3 Point;
-typedef CGAL::Surface_mesh<Point> Mesh;
+typedef K::Point_3                     Point;
+typedef CGAL::Surface_mesh<Point>      Mesh;
+typedef K::Vector_3                    Vector;
 
 namespace map_gen {
   class MapGen {
