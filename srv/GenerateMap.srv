@@ -1,4 +1,6 @@
 string file_path
+string in_file_path
+float32 in_file_reduction_factor
 int32 seed
 int32 size
 float32 max_slope

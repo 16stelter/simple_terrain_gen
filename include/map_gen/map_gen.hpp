@@ -13,6 +13,8 @@
 #include <CGAL/Qt/Basic_viewer.h>
 #include <CGAL/Polygon_mesh_processing/angle_and_area_smoothing.h>
 #include <CGAL/Polygon_mesh_processing/fair.h>
+#include <CGAL/Surface_mesh_simplification/edge_collapse.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Edge_count_ratio_stop_predicate.h>
 
 typedef CGAL::Simple_cartesian<double> K;
 typedef K::Point_3                     Point;

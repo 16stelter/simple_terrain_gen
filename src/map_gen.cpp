@@ -17,89 +17,125 @@ MapGen::MapGen(rclcpp::Node::SharedPtr node,
 void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Request> request, std::shared_ptr<map_gen::srv::GenerateMap::Response> response)
 {
   RCLCPP_INFO(node_->get_logger(), "Got request");
-  if (request->seed == 0)
-  {
-    std::srand(static_cast<unsigned int>(std::time(0)));
+  Mesh mesh;
+  if(request->in_file_path != "")
+  { 
+    CGAL::IO::read_STL(request->in_file_path, mesh);
+    RCLCPP_INFO(node_->get_logger(), "Faces: %d", mesh.number_of_faces());
+    if(request -> in_file_reduction_factor > 0.0) // 0 is the default in a ros msg. If this is 0 we assume the user did not want mesh reduction.
+    {
+      // find lowest z value
+      double min_z = std::numeric_limits<double>::max();
+      for (auto v : vertices(mesh)) {
+          double z = mesh.point(v).z();
+          if (z < min_z && z != 0.0) {
+              min_z = z;
+          }
+      }
+
+      // remove bottom vertices
+      Mesh::Halfedge_index  hr; 
+      for (auto v : vertices(mesh)) {
+        if(abs(mesh.point(v).z() - min_z) < 1e-2) // small tolerance so all bottom vertices are removed
+        {
+          Mesh::Halfedge_index  h = halfedge(v, mesh);
+          hr = CGAL::Euler::remove_center_vertex(h, mesh);
+        }
+      }
+
+      CGAL::Euler::remove_face(hr, mesh); // previous step leaves one large face from merging the others. Remove that face here.
+
+      CGAL::Surface_mesh_simplification::Edge_count_ratio_stop_predicate<Mesh> stop(request->in_file_reduction_factor);
+      int num_collapsed = CGAL::Surface_mesh_simplification::edge_collapse(mesh, stop);
+      RCLCPP_INFO(node_->get_logger(), "Reduced Faces: %d", mesh.number_of_faces());
+    }
   }
   else
   {
-    std::srand(static_cast<unsigned int>(request->seed));
-  }
-
-  Mesh mesh;
-  double max_slope_rad = request->max_slope * M_PI / 180.0;
-  double max_height_diff = std::tan(max_slope_rad);
-
-  std::vector<Mesh::Vertex_index> vertices;
-
-  for (int i = 0; i <= request->size; ++i) {
-    for (int j = 0; j <= request->size; ++j) {
-      double z = 0;
-      if(i==0 && j==0)
-      {
-        z = static_cast <float> (rand()) / (static_cast <double> (RAND_MAX));
-      }
-      else if (i==0)
-      {
-        auto it = mesh.vertices().begin();
-        std::advance(it, j - 1);
-        z = mesh.point(*it).z() + max_height_diff * (static_cast<double>(rand()) / (RAND_MAX / 2) - 1);
-      }
-      else if (j==0)
-      {
-        auto it = mesh.vertices().begin();
-        std::advance(it, i * request->size + j - request->size);
-        z = mesh.point(*it).z() + max_height_diff * (static_cast<double>(rand()) / (RAND_MAX / 2) - 1);
-      }
-      else
-      {
-        auto it = mesh.vertices().begin();
-        std::advance(it, j - 1);
-        float zj = mesh.point(*it).z();
-        it = mesh.vertices().begin();
-        std::advance(it, i * request->size + j - request->size);
-        float zi = mesh.point(*it).z();
-        double max_z = std::min(zi + max_height_diff, zj + max_height_diff);
-        double min_z = std::max(zi - max_height_diff, zj - max_height_diff);
-        z = min_z + (max_z - min_z) * static_cast<double>(rand()) / RAND_MAX;
-      }
-      Point p(i, j, z);
-      vertices.push_back(mesh.add_vertex(p));
+    if (request->seed == 0)
+    {
+      std::srand(static_cast<unsigned int>(std::time(0)));
     }
-  }
-
-  for (int i = 0; i < request->size; ++i) {
-    for (int j = 0; j < request->size; ++j) {
-      Mesh::Vertex_index v0 = vertices[i * (request->size + 1) + j];
-      Mesh::Vertex_index v1 = vertices[i * (request->size + 1) + (j + 1)];
-      Mesh::Vertex_index v2 = vertices[(i + 1) * (request->size + 1) + j];
-      Mesh::Vertex_index v3 = vertices[(i + 1) * (request->size + 1) + (j + 1)];
-
-      mesh.add_face(v0, v2, v1);
-      mesh.add_face(v1, v2, v3);
-    }
-  }
-
-  //Laplacian smoothing
-  for (int i = 0; i < request->smoothing_iterations; ++i) {
-    std::vector<double> new_z;
-
-    for (auto v : mesh.vertices()) {
-      std::vector<double> nz;
-      for (auto vertex : mesh.vertices_around_face(mesh.halfedge(v))) {
-          nz.push_back(mesh.point(vertex).z());
-      }
-      
-      double sum = mesh.point(v).z();
-      sum += std::accumulate(nz.begin(), nz.end(), 0.0);
-      double avg_z = sum / (nz.size() + 1);
-      new_z.push_back(mesh.point(v).z() + request->smoothing_alpha * (avg_z - mesh.point(v).z()));
+    else
+    {
+      std::srand(static_cast<unsigned int>(request->seed));
     }
 
-    int idx = 0;
-    for (auto v : mesh.vertices()) {
-      auto point = mesh.point(v);
-      mesh.point(v) = Point(point.x(), point.y(), new_z[idx++]);
+    Mesh mesh;
+    double max_slope_rad = request->max_slope * M_PI / 180.0;
+    double max_height_diff = std::tan(max_slope_rad);
+
+    std::vector<Mesh::Vertex_index> vertices;
+
+    for (int i = 0; i <= request->size; ++i) {
+      for (int j = 0; j <= request->size; ++j) {
+        double z = 0;
+        if(i==0 && j==0)
+        {
+          z = static_cast <float> (rand()) / (static_cast <double> (RAND_MAX));
+        }
+        else if (i==0)
+        {
+          auto it = mesh.vertices().begin();
+          std::advance(it, j - 1);
+          z = mesh.point(*it).z() + max_height_diff * (static_cast<double>(rand()) / (RAND_MAX / 2) - 1);
+        }
+        else if (j==0)
+        {
+          auto it = mesh.vertices().begin();
+          std::advance(it, i * request->size + j - request->size);
+          z = mesh.point(*it).z() + max_height_diff * (static_cast<double>(rand()) / (RAND_MAX / 2) - 1);
+        }
+        else
+        {
+          auto it = mesh.vertices().begin();
+          std::advance(it, j - 1);
+          float zj = mesh.point(*it).z();
+          it = mesh.vertices().begin();
+          std::advance(it, i * request->size + j - request->size);
+          float zi = mesh.point(*it).z();
+          double max_z = std::min(zi + max_height_diff, zj + max_height_diff);
+          double min_z = std::max(zi - max_height_diff, zj - max_height_diff);
+          z = min_z + (max_z - min_z) * static_cast<double>(rand()) / RAND_MAX;
+        }
+        Point p(i, j, z);
+        vertices.push_back(mesh.add_vertex(p));
+      }
+    }
+
+    for (int i = 0; i < request->size; ++i) {
+      for (int j = 0; j < request->size; ++j) {
+        Mesh::Vertex_index v0 = vertices[i * (request->size + 1) + j];
+        Mesh::Vertex_index v1 = vertices[i * (request->size + 1) + (j + 1)];
+        Mesh::Vertex_index v2 = vertices[(i + 1) * (request->size + 1) + j];
+        Mesh::Vertex_index v3 = vertices[(i + 1) * (request->size + 1) + (j + 1)];
+
+        mesh.add_face(v0, v2, v1);
+        mesh.add_face(v1, v2, v3);
+      }
+    }
+
+    //Laplacian smoothing
+    for (int i = 0; i < request->smoothing_iterations; ++i) {
+      std::vector<double> new_z;
+
+      for (auto v : mesh.vertices()) {
+        std::vector<double> nz;
+        for (auto vertex : mesh.vertices_around_face(mesh.halfedge(v))) {
+            nz.push_back(mesh.point(vertex).z());
+        }
+        
+        double sum = mesh.point(v).z();
+        sum += std::accumulate(nz.begin(), nz.end(), 0.0);
+        double avg_z = sum / (nz.size() + 1);
+        new_z.push_back(mesh.point(v).z() + request->smoothing_alpha * (avg_z - mesh.point(v).z()));
+      }
+
+      int idx = 0;
+      for (auto v : mesh.vertices()) {
+        auto point = mesh.point(v);
+        mesh.point(v) = Point(point.x(), point.y(), new_z[idx++]);
+      }
     }
   }
 
