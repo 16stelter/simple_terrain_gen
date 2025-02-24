@@ -20,6 +20,7 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   Mesh mesh;
   if(request->in_file_path != "")
   { 
+    RCLCPP_INFO(node_->get_logger(), "From file");
     CGAL::IO::read_STL(request->in_file_path, mesh);
     RCLCPP_INFO(node_->get_logger(), "Faces: %d", mesh.number_of_faces());
     if(request -> in_file_reduction_factor > 0.0) // 0 is the default in a ros msg. If this is 0 we assume the user did not want mesh reduction.
@@ -52,6 +53,7 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   }
   else
   {
+    RCLCPP_INFO(node_->get_logger(), "Generating new map");
     if (request->seed == 0)
     {
       std::srand(static_cast<unsigned int>(std::time(0)));
@@ -61,7 +63,6 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
       std::srand(static_cast<unsigned int>(request->seed));
     }
 
-    Mesh mesh;
     double max_slope_rad = request->max_slope * M_PI / 180.0;
     double max_height_diff = std::tan(max_slope_rad);
 
