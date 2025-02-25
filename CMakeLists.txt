@@ -37,6 +37,7 @@ add_compile_options(-Wall -Werror -Wno-unused -fPIC)
 
 add_executable(MapGen src/map_gen.cpp)
 add_executable(MapGenDepth src/map_gen_depth.cpp)
+add_executable(MapGenTest src/map_gen_test.cpp)
 
 ament_target_dependencies(
   MapGenDepth
@@ -61,8 +62,17 @@ ament_target_dependencies(
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 target_link_libraries(MapGen "${cpp_typesupport_target}")
 target_link_libraries(MapGenDepth "${cpp_typesupport_target}")
+target_link_libraries(MapGenTest "${cpp_typesupport_target}")
 
 target_link_libraries(MapGen
+                      rclcpp::rclcpp  
+                      CGAL::CGAL 
+                      Qt6::Core 
+                      Qt6::Widgets
+                      CGAL::CGAL_Basic_viewer
+)
+
+target_link_libraries(MapGenTest
                       rclcpp::rclcpp  
                       CGAL::CGAL 
                       Qt6::Core 
@@ -79,6 +89,7 @@ target_link_libraries(MapGenDepth
 )
 
 install(TARGETS MapGen DESTINATION lib/${PROJECT_NAME})
+install(TARGETS MapGenTest DESTINATION lib/${PROJECT_NAME})
 install(TARGETS MapGenDepth DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY resources DESTINATION share/${PROJECT_NAME})
