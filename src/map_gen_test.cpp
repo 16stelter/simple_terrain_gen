@@ -29,13 +29,10 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
     std::srand(static_cast<unsigned int>(request->seed));
   }
 
-  double max_slope_rad = request->max_slope * M_PI / 180.0;
-  double max_height_diff = std::tan(max_slope_rad);
-
   std::vector<Mesh::Vertex_index> vertices;
 
-  for (int i = 0; i <= request->size; ++i) {
-    for (int j = 0; j <= request->size; ++j) {
+  for (int i = 0; i <= request->size; i=i+request->smoothing_iterations) {
+    for (int j = 0; j <= request->size; j=j+request->smoothing_iterations) {
       double z = 0;
       if(i < request->size/2 && j < request->size/2)
       {
@@ -43,27 +40,27 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
       }
       else if (i < request->size/2)
       {
-        z = 3.0;
+        z = 2.0;
       }
       else if (j < request->size/2)
       {
-        z = 6.0;
+        z = 2.0;
       }
       else
       {
-        z = 9.0;
+        z = 4.0;
       }
       Point p(i, j, z);
       vertices.push_back(mesh.add_vertex(p));
     }
   }
 
-  for (int i = 0; i < request->size; ++i) {
-    for (int j = 0; j < request->size; ++j) {
-      Mesh::Vertex_index v0 = vertices[i * (request->size + 1) + j];
-      Mesh::Vertex_index v1 = vertices[i * (request->size + 1) + (j + 1)];
-      Mesh::Vertex_index v2 = vertices[(i + 1) * (request->size + 1) + j];
-      Mesh::Vertex_index v3 = vertices[(i + 1) * (request->size + 1) + (j + 1)];
+  for (int i = 0; i < request->size/request->smoothing_iterations; ++i) {
+    for (int j = 0; j < request->size/request->smoothing_iterations; ++j) {
+      Mesh::Vertex_index v0 = vertices[i * (request->size/request->smoothing_iterations + 1) + j];
+      Mesh::Vertex_index v1 = vertices[i * (request->size/request->smoothing_iterations + 1) + (j + 1)];
+      Mesh::Vertex_index v2 = vertices[(i + 1) * (request->size/request->smoothing_iterations + 1) + j];
+      Mesh::Vertex_index v3 = vertices[(i + 1) * (request->size/request->smoothing_iterations + 1) + (j + 1)];
 
       mesh.add_face(v0, v2, v1);
       mesh.add_face(v1, v2, v3);
