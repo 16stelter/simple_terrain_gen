@@ -122,12 +122,13 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
 
       for (auto v : mesh.vertices()) {
         std::vector<double> nz;
-        for (auto vertex : mesh.vertices_around_face(mesh.halfedge(v))) {
-            nz.push_back(mesh.point(vertex).z());
+        for(auto h : halfedges_around_target(v, mesh)) {
+            auto neighbor = source(h, mesh);
+            nz.push_back(mesh.point(neighbor).z());
         }
-        
         double sum = mesh.point(v).z();
         sum += std::accumulate(nz.begin(), nz.end(), 0.0);
+        
         double avg_z = sum / (nz.size() + 1);
         new_z.push_back(mesh.point(v).z() + request->smoothing_alpha * (avg_z - mesh.point(v).z()));
       }
