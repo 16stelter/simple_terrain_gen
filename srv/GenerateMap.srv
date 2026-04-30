@@ -3,10 +3,10 @@ string in_file_path
 float32 in_file_reduction_factor
 int32 seed
 int32 size
+float32 scale
 float32 max_slope
 int32 smoothing_iterations
 float32 smoothing_alpha
-
+int32 mode # 0 - classic, 1 - with safe border
 ---
-
 bool success

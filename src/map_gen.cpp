@@ -21,6 +21,10 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   if(request->in_file_path != "")
   { 
     RCLCPP_INFO(node_->get_logger(), "From file");
+    if(request->scale != 0.0)
+    {
+      RCLCPP_WARN(node_->get_logger(), "The scale parameter is currently only implemented for random maps. Parameter is ignored.");
+    }
     CGAL::IO::read_STL(request->in_file_path, mesh);
     RCLCPP_INFO(node_->get_logger(), "Faces: %d", mesh.number_of_faces());
     if(request -> in_file_reduction_factor > 0.0) // 0 is the default in a ros msg. If this is 0 we assume the user did not want mesh reduction.
@@ -53,9 +57,14 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   }
   else
   {
+    if(request->scale == 0.0)
+    {
+      request->scale = 1.0;
+    }
     RCLCPP_INFO(node_->get_logger(), "Generating new map");
     if (request->seed == 0)
     {
+      RCLCPP_WARN(node_->get_logger(), "No seed. Using timestamp for seeding.");
       std::srand(static_cast<unsigned int>(std::time(0)));
     }
     else
@@ -64,14 +73,18 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
     }
 
     double max_slope_rad = request->max_slope * M_PI / 180.0;
-    double max_height_diff = std::tan(max_slope_rad);
+    double max_height_diff = std::tan(max_slope_rad) * request->scale;
 
     std::vector<Mesh::Vertex_index> vertices;
 
     for (int i = 0; i <= request->size; ++i) {
       for (int j = 0; j <= request->size; ++j) {
         double z = 0;
-        if(i==0 && j==0)
+        if (request->mode == 1 && (i <= 1 || j <= 1 || i >= request->size - 1 || j >= request->size - 1))
+        {
+          z = 0.0;
+        }
+        else if(i==0 && j==0)
         {
           z = static_cast <float> (rand()) / (static_cast <double> (RAND_MAX));
         }
@@ -99,7 +112,7 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
           double min_z = std::max(zi - max_height_diff, zj - max_height_diff);
           z = min_z + (max_z - min_z) * static_cast<double>(rand()) / RAND_MAX;
         }
-        Point p(i, j, z);
+        Point p(i * request->scale, j * request->scale, z);
         vertices.push_back(mesh.add_vertex(p));
       }
     }
@@ -137,6 +150,66 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
       for (auto v : mesh.vertices()) {
         auto point = mesh.point(v);
         mesh.point(v) = Point(point.x(), point.y(), new_z[idx++]);
+      }
+    }
+
+    const double barrier_height = 0.05; // 5 cm
+
+    std::vector<Mesh::Vertex_index> barrier_vertices(vertices.size(), Mesh::Vertex_index());
+
+    for (int i = 0; i <= request->size; ++i)
+    {
+      for (int j = 0; j <= request->size; ++j)
+      {
+        if (i == 0 || j == 0 || i == request->size || j == request->size)
+        {
+          int idx = i * (request->size + 1) + j;
+          auto p = mesh.point(vertices[idx]);
+          barrier_vertices[idx] =
+            mesh.add_vertex(Point(p.x(), p.y(), p.z() + barrier_height));
+        }
+      }
+    }
+
+    for (int i = 0; i < request->size; ++i)
+    {
+      for (int j = 0; j < request->size; ++j)
+      {
+        if (i == 0 || j == 0 || i == request->size - 1 || j == request->size - 1)
+        {
+          int idx = i * (request->size + 1) + j;
+
+          auto v0 = vertices[idx];
+          auto v1 = vertices[idx + 1];
+          auto v2 = vertices[idx + request->size + 1];
+          auto v3 = vertices[idx + request->size + 2];
+
+          auto t0 = barrier_vertices[idx];
+          auto t1 = barrier_vertices[idx + 1];
+          auto t2 = barrier_vertices[idx + request->size + 1];
+          auto t3 = barrier_vertices[idx + request->size + 2];
+
+          if (t0 != Mesh::Vertex_index() && t1 != Mesh::Vertex_index())
+          {
+            mesh.add_face(v0, v1, t1);
+            mesh.add_face(v0, t1, t0);
+          }
+          if (t1 != Mesh::Vertex_index() && t3 != Mesh::Vertex_index())
+          {
+            mesh.add_face(v1, v3, t3);
+            mesh.add_face(v1, t3, t1);
+          }
+          if (t3 != Mesh::Vertex_index() && t2 != Mesh::Vertex_index())
+          {
+            mesh.add_face(v3, v2, t2);
+            mesh.add_face(v3, t2, t3);
+          }
+          if (t2 != Mesh::Vertex_index() && t0 != Mesh::Vertex_index())
+          {
+            mesh.add_face(v2, v0, t0);
+            mesh.add_face(v2, t0, t2);
+          }
+        }
       }
     }
   }
