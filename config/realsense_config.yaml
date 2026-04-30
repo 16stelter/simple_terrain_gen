@@ -1,0 +1,8 @@
+map_gen_live:
+  ros__parameters:
+    pointcloud_topic: "/camera/realsense/depth/color/points"
+    use_intensity: True
+    use_rgb: False
+    grid_resolution: 0.1
+    grid_size_x: 5.0
+    grid_size_y: 5.0
