@@ -25,9 +25,13 @@ find_package(grid_map_ros REQUIRED)
 find_package(grid_map_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(fastnoiselite REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GenerateMap.srv"
+  "srv/GenerateTerrain.srv"
   DEPENDENCIES 
   sensor_msgs
 )
@@ -43,17 +47,22 @@ add_compile_options(-Wall -Werror -Wno-unused -fPIC)
 add_executable(MapGen src/map_gen.cpp)
 add_executable(MapGenLive src/map_gen_live.cpp)
 add_executable(MapGenTest src/map_gen_test.cpp)
+add_executable(TerrainGen src/terrain_gen.cpp)
+
+set(COMMON_DEPS
+    ament_cmake
+    rclcpp
+    rosidl_default_runtime
+    ament_index_cpp
+)
 
 ament_target_dependencies(
   MapGenLive
+  ${COMMON_DEPS}
   sensor_msgs
   geometry_msgs
   tf2_ros
   tf2_geometry_msgs
-  ament_cmake
-  rclcpp
-  rosidl_default_runtime
-  ament_index_cpp
   grid_map_core
   grid_map_msgs
   grid_map_ros
@@ -63,49 +72,69 @@ ament_target_dependencies(
 
 ament_target_dependencies(
   MapGen
-  ament_cmake
+  ${COMMON_DEPS}
   grid_map_core
-  rclcpp
-  rosidl_default_runtime
-  ament_index_cpp
 )
 
 ament_target_dependencies(
   MapGenTest
-  ament_cmake
+  ${COMMON_DEPS}
   grid_map_core
+)
+
+ament_target_dependencies(
+  TerrainGen
+  ${COMMON_DEPS}
+  fastnoiselite
+  OpenCV
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 target_link_libraries(MapGen "${cpp_typesupport_target}")
 target_link_libraries(MapGenLive "${cpp_typesupport_target}")
 target_link_libraries(MapGenTest "${cpp_typesupport_target}")
+target_link_libraries(TerrainGen "${cpp_typesupport_target}")
+
+set(CGAL_LIBS
+    CGAL::CGAL
+    Qt6::Core
+    Qt6::Widgets
+    CGAL::CGAL_Basic_viewer
+)
 
 target_link_libraries(MapGen
-                      rclcpp::rclcpp  
-                      CGAL::CGAL 
-                      Qt6::Core 
-                      Qt6::Widgets
-                      CGAL::CGAL_Basic_viewer
+    rclcpp::rclcpp
+    ${CGAL_LIBS}
 )
 
 target_link_libraries(MapGenTest
-                      rclcpp::rclcpp  
-                      CGAL::CGAL 
-                      Qt6::Core 
-                      Qt6::Widgets
-                      CGAL::CGAL_Basic_viewer
+    rclcpp::rclcpp
+    ${CGAL_LIBS}
 )
 
 target_link_libraries(MapGenLive
                       rclcpp::rclcpp
 )
 
-install(TARGETS MapGen DESTINATION lib/${PROJECT_NAME})
-install(TARGETS MapGenTest DESTINATION lib/${PROJECT_NAME})
-install(TARGETS MapGenLive DESTINATION lib/${PROJECT_NAME})
+target_link_libraries(TerrainGen
+                      rclcpp::rclcpp
+                      yaml-cpp::yaml-cpp
+                      
+)
 
-install(DIRECTORY resources DESTINATION share/${PROJECT_NAME})
-install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
+install(
+    TARGETS
+        MapGen
+        MapGenTest
+        MapGenLive
+        TerrainGen
+    DESTINATION lib/${PROJECT_NAME}
+)
 
+install(
+    DIRECTORY
+        resources
+        config
+    DESTINATION share/${PROJECT_NAME}
+)
 ament_package()
