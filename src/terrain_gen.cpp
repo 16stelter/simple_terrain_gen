@@ -125,10 +125,11 @@ void TerrainGen::generate_terrain(const std::shared_ptr<map_gen::srv::GenerateTe
   }
   out << YAML::EndSeq;
   out << YAML::EndMap;
-  std::ofstream fout(request->file_path + ".yaml");
+  std::filesystem::path file(request->file_path);
+  std::ofstream fout(file.replace_extension(".yaml"));
   fout << out.c_str();
   fout.close();
-  cv::imwrite(request->file_path + ".png", terrain_image);
+  cv::imwrite(file.replace_extension(".png"), terrain_image);
   response->success = true;
   RCLCPP_INFO(node_->get_logger(), "Terrain generated successfully.");
 }
