@@ -97,6 +97,15 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   connect(dropdown, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
     draw_type_ = index;
   });
+  QLabel *brush_label = new QLabel("Brush Size:", this);
+  toolbar->addWidget(brush_label);
+  QSpinBox *brush_size_spinbox = new QSpinBox(this);
+  brush_size_spinbox->setRange(0, 50);
+  brush_size_spinbox->setValue(brush_size_);
+  toolbar->addWidget(brush_size_spinbox);
+  connect(brush_size_spinbox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+    brush_size_ = value;
+  });
 
   // painting
   vtkNew<vtkLookupTable> lut;
@@ -141,9 +150,23 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
         picker->Pick(pos[0], pos[1], 0, self->vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer());
         vtkIdType point_id = picker->GetPointId();
         if (point_id != -1) {
-          self->draw_mode_ == 1 ? self->terrain_map_->SetValue(point_id, self->draw_type_) : self->terrain_map_->SetValue(point_id, 0);
+          int cx = point_id % self->nx_;
+          int cy = point_id / self->nx_;
+          int r = self->brush_size_;
+          for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+              if (dx * dx + dy * dy <= r * r) {
+                int nx = cx + dx;
+                int ny = cy + dy;
+                if (nx >= 0 && nx < self->nx_ && ny >= 0 && ny < self->ny_) {
+                  int idx = ny * self->nx_ + nx;
+                  self->draw_mode_ == 1 ? self->terrain_map_->SetValue(idx, self->draw_type_) : self->terrain_map_->SetValue(idx, 0);
+                }
+              }
+            }
+          }
           self->terrain_map_->Modified();
-          self->vtk_widget_->renderWindow()->Render();
+          interactor->GetRenderWindow()->Render();
         }
       }
     }
