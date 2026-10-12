@@ -24,6 +24,8 @@
 #include <QtWidgets/QWidget>
 #include <QtCore/QTimer>
 #include <QVTKOpenGLNativeWidget.h>
+#include <QFileDialog>
+
 #include <vtkActor.h>
 #include <vtkRenderer.h>
 #include <vtkGenericOpenGLRenderWindow.h>
@@ -32,7 +34,6 @@
 #include <vtkCommand.h>
 #include <vtkPointPicker.h>
 #include <vtkCallbackCommand.h>
-#include <vtkSTLWriter.h>
 #include <vtkPolyData.h>
 #include <vtkPoints.h>
 #include <vtkIntArray.h>
@@ -45,8 +46,10 @@
 #include <vtkImageMapToColors.h>
 #include <vtkImageActor.h>
 #include <vtkImageMapper3D.h>
-
-
+#include <vtkSTLWriter.h>
+#include <vtkWindowToImageFilter.h>
+#include <vtkPNGWriter.h>
+#include <fstream>
 
 namespace map_gen {
 
@@ -85,6 +88,7 @@ class MapGenLive : public QMainWindow {
         bool is_mousedown_ = false;
 
         vtkSmartPointer<vtkIntArray> terrain_map_;
+        vtkSmartPointer<vtkPolyData> surface_mesh_;
 
         void pointcloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
@@ -93,6 +97,12 @@ class MapGenLive : public QMainWindow {
         void depth_camera_info_cb(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
 
         void update_surface_mesh(const std::vector<double> &z_sums, const std::vector<int> &z_counts);
+
+        static void click_cb(vtkObject* caller, long unsigned int event_id, void* client_data, void* call_data);
+
+        void save_cb();
+
+        void clear_cb();
 };
 
 class ColorMap
