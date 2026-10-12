@@ -19,6 +19,9 @@
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QSpinBox>
+#include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QWidget>
 #include <QtCore/QTimer>
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkActor.h>
@@ -38,6 +41,10 @@
 #include <vtkRendererCollection.h>
 #include <vtkLookupTable.h>
 #include <vtkPointData.h>
+#include <vtkImageData.h>
+#include <vtkImageMapToColors.h>
+#include <vtkImageActor.h>
+#include <vtkImageMapper3D.h>
 
 
 
@@ -58,7 +65,10 @@ class MapGenLive : public QMainWindow {
         tf2_ros::TransformListener tf_listener_;
         std::unordered_map<std::string, rclcpp::Parameter> param_map_;
         vtkSmartPointer<vtkPoints> points_;
+
         QVTKOpenGLNativeWidget *vtk_widget_;
+        QVTKOpenGLNativeWidget *vtk_widget_2d_;
+
 
         double sx_;
         double sy_;
