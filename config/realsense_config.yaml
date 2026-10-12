@@ -1,7 +1,10 @@
 map_gen_live:
   ros__parameters:
-    input_topic: "/utlidar/cloud"
+    pointcloud_topic: ""
+    depth_image_topic: "/camera/realsense/depth/image_rect_raw"
+    depth_camera_info_topic: "/camera/realsense/depth/camera_info"
     grid_resolution: 0.1
-    grid_size_x: 5.0
-    grid_size_y: 5.0
-    use_tf: true
+    grid_size_x: 10.0
+    grid_size_y: 10.0
+    use_tf: false
+    terrain_types: ['soil', 'bedrock', 'sand', 'large_rock']

@@ -3,10 +3,13 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <thread>
 
 #include <QtWidgets/QApplication>
@@ -31,6 +34,8 @@ class MapGenLive : public QMainWindow {
                             std::vector<rclcpp::Parameter> parameters = {}, QWidget *parent = nullptr);
         
         rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub_;
+        rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_image_sub_;
+        rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr depth_camera_info_sub_;
 
     private:
         rclcpp::Node::SharedPtr node_;
@@ -46,9 +51,17 @@ class MapGenLive : public QMainWindow {
         int nx_;
         int ny_;
 
+        std::array<double, 9> camera_intrinsics_;
+
         bool is_paused_ = false;
 
         void pointcloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+
+        void depth_image_cb(const sensor_msgs::msg::Image::SharedPtr msg);
+        
+        void depth_camera_info_cb(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
+
+        void update_surface_mesh(const std::vector<double> &z_sums, const std::vector<int> &z_counts);
 };
 
 }
