@@ -20,14 +20,14 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
 find_package(grid_map_core REQUIRED)
 find_package(grid_map_ros REQUIRED)
 find_package(grid_map_msgs REQUIRED)
-find_package(PCL REQUIRED)
-find_package(pcl_conversions REQUIRED)
 find_package(fastnoiselite REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(VTK REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GenerateMap.srv"
@@ -63,11 +63,8 @@ ament_target_dependencies(
   geometry_msgs
   tf2_ros
   tf2_geometry_msgs
+  tf2_sensor_msgs
   grid_map_core
-  grid_map_msgs
-  grid_map_ros
-  PCL
-  pcl_conversions
 )
 
 ament_target_dependencies(
@@ -113,7 +110,9 @@ target_link_libraries(MapGenTest
 )
 
 target_link_libraries(MapGenLive
-                      rclcpp::rclcpp
+    ${VTK_LIBRARIES}
+    Qt6::Core
+    Qt6::Widgets
 )
 
 target_link_libraries(TerrainGen
