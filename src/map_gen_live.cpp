@@ -56,10 +56,6 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   // Qt and VTK setup
   resize(800, 600);
   setWindowTitle("MapGen Live");
-  QToolBar *toolbar = new QToolBar(this);
-  addToolBar(toolbar);
-  QPushButton *pause_button = new QPushButton("Pause", this);
-  toolbar->addWidget(pause_button);
   vtk_widget_ = new QVTKOpenGLNativeWidget(this);
   setCentralWidget(vtk_widget_);
   vtkNew<vtkGenericOpenGLRenderWindow> render_window;
@@ -68,10 +64,79 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   render_window->AddRenderer(renderer);
 
   // Toolbar setup
+  QToolBar *toolbar = new QToolBar(this);
+  addToolBar(toolbar);
+  QPushButton *pause_button = new QPushButton("Pause", this);
+  toolbar->addWidget(pause_button);
   connect(pause_button, &QPushButton::clicked, this, [this, pause_button]() {
       is_paused_ = !is_paused_;
       pause_button->setText(is_paused_ ? "Resume" : "Pause");
   });
+  QPushButton *draw_button = new QPushButton("Draw", this);
+  toolbar->addWidget(draw_button);
+  QPushButton *erase_button = new QPushButton("Erase", this);
+  toolbar->addWidget(erase_button);
+  connect(draw_button, &QPushButton::clicked, this, [this, draw_button, erase_button]() {
+    draw_mode_ == 1 ? draw_mode_ = 0 : draw_mode_ = 1;
+    draw_button->setText(draw_mode_ == 1 ? "Stop Drawing" : "Draw");
+    erase_button->setText("Erase");
+  });
+  connect(erase_button, &QPushButton::clicked, this, [this, erase_button, draw_button]() {
+    draw_mode_ == 2 ? draw_mode_ = 0 : draw_mode_ = 2;
+    erase_button->setText(draw_mode_ == 2 ? "Stop Erasing" : "Erase");
+    draw_button->setText("Draw");
+  });
+  QComboBox *dropdown = new QComboBox(this);
+  std::vector<std::string> terrain_types = param_map_["terrain_types"].as_string_array();
+  for (std::string val : terrain_types) {
+    dropdown->addItem(QString::fromStdString(val));
+  }
+  toolbar->addWidget(dropdown);
+  connect(dropdown, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+    draw_type_ = index;
+  });
+
+  // painting
+  vtkNew<vtkLookupTable> lut;
+  int num_terrains = terrain_types.size();
+  lut->SetNumberOfTableValues(num_terrains);
+  
+  auto& color_map = ColorMap::Get();
+  
+  for (int i = 0; i < num_terrains; ++i) {
+    if (color_map.find(i) != color_map.end()) {
+      auto color = color_map[i];
+      lut->SetTableValue(i, std::get<0>(color), std::get<1>(color), std::get<2>(color));
+    } else {
+      lut->SetTableValue(i, 1.0, 1.0, 1.0);
+    }
+  }
+  lut->Build();
+
+  vtkNew<vtkCallbackCommand> click_callback;
+  click_callback->SetClientData(this);
+  click_callback->SetCallback([](vtkObject* caller, long unsigned int, void* clientData, void*) {
+    auto* self = static_cast<MapGenLive*>(clientData);
+    auto* style = vtkInteractorStyle::SafeDownCast(caller);
+    auto* interactor = style->GetInteractor();
+    
+    if (self->draw_mode_ == 1 || self->draw_mode_ == 2) {
+      int* pos = interactor->GetEventPosition();
+      vtkNew<vtkPointPicker> picker;
+      picker->Pick(pos[0], pos[1], 0, self->vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer());
+      
+      vtkIdType pointId = picker->GetPointId();
+      if (pointId != -1) {
+        self->draw_mode_ == 1 ? self->terrain_map_->SetValue(pointId, self->draw_type_) : self->terrain_map_->SetValue(pointId, 0);
+        self->terrain_map_->Modified();
+        interactor->GetRenderWindow()->Render();
+      }
+    } else {
+      style->OnLeftButtonDown();
+    }
+  });
+  render_window->GetInteractor()->GetInteractorStyle()->RemoveObservers(vtkCommand::LeftButtonPressEvent);
+  render_window->GetInteractor()->GetInteractorStyle()->AddObserver(vtkCommand::LeftButtonPressEvent, click_callback);
 
   // Mesh setup
   points_ = vtkSmartPointer<vtkPoints>::New();
@@ -109,9 +174,20 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   surface_mesh->SetPoints(points_);
   surface_mesh->SetPolys(polys);
 
+  terrain_map_ = vtkSmartPointer<vtkIntArray>::New();
+  terrain_map_->SetNumberOfComponents(1);
+  terrain_map_->SetName("TerrainType");
+  for (int i = 0; i < nx_ * ny_; ++i) {
+    terrain_map_->InsertNextValue(0);
+  }
+  surface_mesh->GetPointData()->SetScalars(terrain_map_);
+
   // Create mapper and actor
   vtkNew<vtkPolyDataMapper> mapper;
   mapper->SetInputData(surface_mesh);
+  mapper->SetScalarRange(0, std::max(1, num_terrains - 1));
+  mapper->SetLookupTable(lut);
+  mapper->SetScalarModeToUsePointData();
   vtkNew<vtkActor> actor;
   actor->SetMapper(mapper);
   renderer->AddActor(actor);

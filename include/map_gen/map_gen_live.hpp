@@ -16,6 +16,7 @@
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QComboBox>
 #include <QtCore/QTimer>
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkActor.h>
@@ -23,8 +24,20 @@
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkNew.h>
-#include <vtkSphereSource.h>
+#include <vtkCommand.h>
+#include <vtkPointPicker.h>
+#include <vtkCallbackCommand.h>
 #include <vtkSTLWriter.h>
+#include <vtkPolyData.h>
+#include <vtkPoints.h>
+#include <vtkIntArray.h>
+#include <vtkInteractorStyle.h>
+#include <vtkRenderWindow.h>
+#include <vtkRendererCollection.h>
+#include <vtkLookupTable.h>
+#include <vtkPointData.h>
+
+
 
 namespace map_gen {
 
@@ -54,6 +67,10 @@ class MapGenLive : public QMainWindow {
         std::array<double, 9> camera_intrinsics_;
 
         bool is_paused_ = false;
+        int draw_mode_ = 0; // 0: off, 1: draw, 2: erase
+        int draw_type_ = 0;
+
+        vtkSmartPointer<vtkIntArray> terrain_map_;
 
         void pointcloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
@@ -62,6 +79,35 @@ class MapGenLive : public QMainWindow {
         void depth_camera_info_cb(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
 
         void update_surface_mesh(const std::vector<double> &z_sums, const std::vector<int> &z_counts);
+};
+
+class ColorMap
+{
+  public:
+    using Color = std::tuple<float, float, float>;
+    static std::unordered_map<int, Color>& Get()
+    {
+      static std::unordered_map<int, Color> color_map = 
+      {
+        {0, {0.6784314f, 0.8470588f, 0.9019608f}}, // Light Blue
+        {1,  {1.0f, 1.0f, 0.0f}},                 // Yellow
+        {2, {0.5019608f, 0.0f, 0.5019608f}},     // Purple
+        {3,  {0.5019608f, 0.0f, 0.0f}},           // Dark Red
+        {4,  {1.0f, 0.0f, 0.0f}},                 // Red
+        {5,  {0.0f, 1.0f, 0.0f}},                 // Green
+        {6,  {0.0f, 0.0f, 1.0f}},                 // Blue
+        {7, {1.0f, 0.6470588f, 0.0f}},           // Orange
+        {8,  {0.0f, 1.0f, 1.0f}},                 // Cyan
+        {9,  {1.0f, 0.0f, 1.0f}},                 // Magenta
+        {10,  {0.0f, 0.5019608f, 0.0f}},           // Dark Green
+        {11, {0.0f, 0.0f, 0.5019608f}},            // Dark Blue
+        {12, {0.0f, 0.5019608f, 0.5019608f}},     // Teal
+        {13, {0.8235294f, 0.4117647f, 0.1176471f}}, // Chocolate
+        {14,  {1.0f, 1.0f, 1.0f}},                 // White
+        {15, {0.2941177f, 0.0f, 0.5098039f}}      // Indigo
+      };
+      return color_map;
+    }
 };
 
 }
