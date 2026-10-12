@@ -11,6 +11,8 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   tf_buffer_(node_->get_clock()),
   tf_listener_(tf_buffer_)
   {
+
+  // Declare parameters
   node_->declare_parameter<double>("grid_resolution", 1.0);
   node_->declare_parameter<double>("grid_size_x", 10.0);
   node_->declare_parameter<double>("grid_size_y", 10.0);
@@ -32,6 +34,7 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
       param_map_[param.get_name()] = param;
   }
 
+  // Ros subscriptions
   if (!param_map_["pointcloud_topic"].as_string().empty()) {
     pointcloud_sub_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
         param_map_["pointcloud_topic"].as_string(),
@@ -51,7 +54,6 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   else {
     RCLCPP_ERROR(node_->get_logger(), "No valid input topic specified. Please set either pointcloud_topic or depth_image_topic.");
   }
-
 
   // Qt and VTK setup
   resize(800, 600);
@@ -115,28 +117,53 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
 
   vtkNew<vtkCallbackCommand> click_callback;
   click_callback->SetClientData(this);
-  click_callback->SetCallback([](vtkObject* caller, long unsigned int, void* clientData, void*) {
-    auto* self = static_cast<MapGenLive*>(clientData);
+  click_callback->SetCallback([](vtkObject* caller, long unsigned int event_id, void* client_data, void*) {
+    auto* self = static_cast<MapGenLive*>(client_data);
     auto* style = vtkInteractorStyle::SafeDownCast(caller);
     auto* interactor = style->GetInteractor();
-    
-    if (self->draw_mode_ == 1 || self->draw_mode_ == 2) {
-      int* pos = interactor->GetEventPosition();
-      vtkNew<vtkPointPicker> picker;
-      picker->Pick(pos[0], pos[1], 0, self->vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer());
-      
-      vtkIdType pointId = picker->GetPointId();
-      if (pointId != -1) {
-        self->draw_mode_ == 1 ? self->terrain_map_->SetValue(pointId, self->draw_type_) : self->terrain_map_->SetValue(pointId, 0);
-        self->terrain_map_->Modified();
-        interactor->GetRenderWindow()->Render();
+    bool handled = false;
+    if (self->draw_mode_ != 0) {
+      if (event_id == vtkCommand::LeftButtonPressEvent) {
+        self->is_mousedown_ = true;
+        handled = true;
       }
-    } else {
-      style->OnLeftButtonDown();
+      else if (event_id == vtkCommand::LeftButtonReleaseEvent) {
+        self->is_mousedown_ = false;
+        handled = true;
+      }
+      else if (event_id == vtkCommand::MouseMoveEvent && self->is_mousedown_) {
+        handled = true;
+      }
+
+      if (handled && self->is_mousedown_) {
+        int* pos = interactor->GetEventPosition();
+        vtkNew<vtkPointPicker> picker;
+        picker->Pick(pos[0], pos[1], 0, self->vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer());
+        vtkIdType point_id = picker->GetPointId();
+        if (point_id != -1) {
+          self->draw_mode_ == 1 ? self->terrain_map_->SetValue(point_id, self->draw_type_) : self->terrain_map_->SetValue(point_id, 0);
+          self->terrain_map_->Modified();
+          self->vtk_widget_->renderWindow()->Render();
+        }
+      }
+    }
+    if (!handled) {
+      if (event_id == vtkCommand::LeftButtonPressEvent) {
+        style->OnLeftButtonDown();
+      } else if (event_id == vtkCommand::LeftButtonReleaseEvent) {
+        style->OnLeftButtonUp();
+      } else if (event_id == vtkCommand::MouseMoveEvent) {
+        style->OnMouseMove();
+      }
     }
   });
-  render_window->GetInteractor()->GetInteractorStyle()->RemoveObservers(vtkCommand::LeftButtonPressEvent);
-  render_window->GetInteractor()->GetInteractorStyle()->AddObserver(vtkCommand::LeftButtonPressEvent, click_callback);
+  auto* interactor_style = render_window->GetInteractor()->GetInteractorStyle();
+  interactor_style->RemoveObservers(vtkCommand::LeftButtonPressEvent);
+  interactor_style->RemoveObservers(vtkCommand::LeftButtonReleaseEvent);
+  interactor_style->RemoveObservers(vtkCommand::MouseMoveEvent);
+  interactor_style->AddObserver(vtkCommand::LeftButtonPressEvent, click_callback);
+  interactor_style->AddObserver(vtkCommand::LeftButtonReleaseEvent, click_callback);
+  interactor_style->AddObserver(vtkCommand::MouseMoveEvent, click_callback);
 
   // Mesh setup
   points_ = vtkSmartPointer<vtkPoints>::New();
@@ -173,8 +200,7 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   vtkNew<vtkPolyData> surface_mesh;
   surface_mesh->SetPoints(points_);
   surface_mesh->SetPolys(polys);
-
-  terrain_map_ = vtkSmartPointer<vtkIntArray>::New();
+  terrain_map_ = vtkSmartPointer<vtkIntArray>::New(); // this holds the terrain/color data
   terrain_map_->SetNumberOfComponents(1);
   terrain_map_->SetName("TerrainType");
   for (int i = 0; i < nx_ * ny_; ++i) {

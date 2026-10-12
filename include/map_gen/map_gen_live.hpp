@@ -69,6 +69,7 @@ class MapGenLive : public QMainWindow {
         bool is_paused_ = false;
         int draw_mode_ = 0; // 0: off, 1: draw, 2: erase
         int draw_type_ = 0;
+        bool is_mousedown_ = false;
 
         vtkSmartPointer<vtkIntArray> terrain_map_;
 
