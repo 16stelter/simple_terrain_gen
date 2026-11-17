@@ -1,0 +1,36 @@
+/**:
+  ros__parameters:
+    frame_id:                        'camera_link'
+    odom_frame_id:                   'odom'
+    subscribe_rgbd:                   true
+    subscribe_odom_info:              false
+    subscribe_scan:                   false
+    approx_sync:                      false
+    sync_queue_size:                  10
+    odom_tf_linear_variance:          0.005
+    odom_tf_angular_variance:         0.005
+    RGBD/NeighborLinkRefining:       'true'
+    RGBD/ProximityBySpace:           'true'
+    RGBD/ProximityByTime:            'false'
+    RGBD/AngularUpdate:               '0.1'
+    RGBD/LinearUpdate:               '0.1'
+    RGBD/LocalRadius:                '5'
+    Reg/Strategy:                    '0'
+    Icp/VoxelSize:                   '0.05'
+    Icp/MaxCorrespondenceDistance:   '0.1'
+    Icp/PointToPlane:                'true'
+    Icp/Iterations:                  '10'
+    Vis/MaxFeatures:                 '1000'
+    Vis/MinInliers:                  '15'
+    RGBD/OptimizeFromGraphEnd:       'false'
+    RGBD/OptimizeMaxError:           '2.0'
+    Reg/Force3DoF:                   'false'
+    Mem/STMSize:                     '10'
+    Grid/Sensor:                     '1'
+    Grid/RangeMax:                   '2.5'
+    Grid/RangeMin:                   '0.3'
+    Grid/CellSize:                   '0.02'
+    Grid/NoiseFilteringRadius:       '0.05'
+    Grid/NoiseFilteringMinNeighbors: '5'
+    Rtabmap/DetectionRate:           '2'
+    Kp/MaxFeatures:                  '500'

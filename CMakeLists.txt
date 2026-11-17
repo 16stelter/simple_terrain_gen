@@ -22,9 +22,6 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
-find_package(grid_map_core REQUIRED)
-find_package(grid_map_ros REQUIRED)
-find_package(grid_map_msgs REQUIRED)
 find_package(fastnoiselite REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
@@ -46,8 +43,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 add_compile_options(-Wall -Werror -Wno-unused -fPIC)
 
 add_executable(MapGen src/map_gen.cpp)
-add_executable(MapGenLive src/map_gen_live.cpp)
 add_executable(MapGenTest src/map_gen_test.cpp)
+add_executable(MapGenEditor src/map_gen_editor.cpp)
 add_executable(TerrainGen src/terrain_gen.cpp)
 
 set(COMMON_DEPS
@@ -58,30 +55,19 @@ set(COMMON_DEPS
 )
 
 ament_target_dependencies(
-  MapGenLive
-  ${COMMON_DEPS}
-  sensor_msgs
-  geometry_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  tf2_sensor_msgs
-  grid_map_core
-  grid_map_ros
-  grid_map_msgs
-  yaml-cpp
-)
-
-ament_target_dependencies(
   MapGen
   ${COMMON_DEPS}
-  grid_map_core
 )
 
 ament_target_dependencies(
   MapGenTest
   ${COMMON_DEPS}
-  grid_map_core
+)
+
+ament_target_dependencies(
+  MapGenEditor
+  ${COMMON_DEPS}
+  yaml-cpp
 )
 
 ament_target_dependencies(
@@ -92,10 +78,6 @@ ament_target_dependencies(
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-target_link_libraries(MapGen "${cpp_typesupport_target}")
-target_link_libraries(MapGenLive "${cpp_typesupport_target}")
-target_link_libraries(MapGenTest "${cpp_typesupport_target}")
-target_link_libraries(TerrainGen "${cpp_typesupport_target}")
 
 set(CGAL_LIBS
     CGAL::CGAL
@@ -105,30 +87,37 @@ set(CGAL_LIBS
 )
 
 target_link_libraries(MapGen
+    "${cpp_typesupport_target}"
     rclcpp::rclcpp
     ${CGAL_LIBS}
 )
 
 target_link_libraries(MapGenTest
+    "${cpp_typesupport_target}"
     rclcpp::rclcpp
     ${CGAL_LIBS}
 )
 
-target_link_libraries(MapGenLive
+target_link_libraries(MapGenEditor
+    "${cpp_typesupport_target}"    
     rclcpp::rclcpp
     yaml-cpp::yaml-cpp
+    ${VTK_LIBRARIES}
+    Qt6::Core
+    Qt6::Widgets
 )
 
 target_link_libraries(TerrainGen
-                      rclcpp::rclcpp
-                      yaml-cpp::yaml-cpp  
+    "${cpp_typesupport_target}"
+    rclcpp::rclcpp
+    yaml-cpp::yaml-cpp  
 )
 
 install(
     TARGETS
         MapGen
         MapGenTest
-        MapGenLive
+        MapGenEditor
         TerrainGen
     DESTINATION lib/${PROJECT_NAME}
 )
@@ -137,6 +126,7 @@ install(
     DIRECTORY
         resources
         config
+        launch
     DESTINATION share/${PROJECT_NAME}
 )
 ament_package()

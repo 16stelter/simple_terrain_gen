@@ -1,8 +1,0 @@
-pointcloud_topic: "/camera/depth/color/points"
-map_topic: "/map"
-grid_resolution: 0.1
-grid_size_init: 10.0
-grid_frame: "odom"
-grid_alpha: 0.2
-grid_min_points: 3
-use_color: true

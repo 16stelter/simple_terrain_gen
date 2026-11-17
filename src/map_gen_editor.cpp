@@ -1,63 +1,29 @@
-#include "map_gen/map_gen_live.hpp"
+#include "map_gen/map_gen_editor.hpp"
 
 namespace map_gen {
 
-MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
+MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
                        const std::string &ns,
                        std::vector<rclcpp::Parameter> parameters,
                        QWidget *parent)
 : QMainWindow(parent),
   node_(node),
-  tf_buffer_(node_->get_clock()),
-  tf_listener_(tf_buffer_)
+  nx_(1),
+  ny_(1)
   {
 
   // Declare parameters
-  node_->declare_parameter<double>("grid_resolution", 1.0);
-  node_->declare_parameter<double>("grid_size_x", 10.0);
-  node_->declare_parameter<double>("grid_size_y", 10.0);
-  node_->declare_parameter<bool>("use_tf", true);
-  node_->declare_parameter<std::string>("pointcloud_topic", "");
-  node_->declare_parameter<std::string>("depth_image_topic", "");
-  node_->declare_parameter<std::string>("depth_camera_info_topic", "");
   node_->declare_parameter<std::vector<std::string>>("terrain_types", std::vector<std::string>{"soil", "bedrock", "sand", "large_rock"});
-  std::vector<std::string> param_names = {"grid_resolution",
-                                          "grid_size_x",
-                                          "grid_size_y",
-                                          "use_tf",
-                                          "pointcloud_topic",
-                                          "depth_image_topic",
-                                          "depth_camera_info_topic",
-                                          "terrain_types"};
+  node_->declare_parameter<float>("grid_resolution", 0.1);
+  std::vector<std::string> param_names = {"terrain_types", "grid_resolution"};
   std::vector<rclcpp::Parameter> params_ = node_->get_parameters(param_names);
   for (const auto& param : params_) {
       param_map_[param.get_name()] = param;
   }
 
-  // Ros subscriptions
-  if (!param_map_["pointcloud_topic"].as_string().empty()) {
-    pointcloud_sub_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
-        param_map_["pointcloud_topic"].as_string(),
-        10,
-        std::bind(&MapGenLive::pointcloud_cb, this, std::placeholders::_1));
-  }
-  else if (!param_map_["depth_image_topic"].as_string().empty() && !param_map_["depth_camera_info_topic"].as_string().empty()) {
-    depth_image_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
-        param_map_["depth_image_topic"].as_string(),
-        10,
-        std::bind(&MapGenLive::depth_image_cb, this, std::placeholders::_1));
-    depth_camera_info_sub_ = node_->create_subscription<sensor_msgs::msg::CameraInfo>(
-        param_map_["depth_camera_info_topic"].as_string(),
-        10,
-        std::bind(&MapGenLive::depth_camera_info_cb, this, std::placeholders::_1));
-  }
-  else {
-    RCLCPP_ERROR(node_->get_logger(), "No valid input topic specified. Please set either pointcloud_topic or depth_image_topic.");
-  }
-
   // Qt and VTK setup
   resize(800, 600);
-  setWindowTitle("MapGen Live");
+  setWindowTitle("MapGen Editor");
   QWidget *central_widget = new QWidget(this);
   setCentralWidget(central_widget);
   QHBoxLayout *main_layout = new QHBoxLayout(central_widget);
@@ -78,12 +44,6 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   // Toolbar setup
   QToolBar *toolbar = new QToolBar(this);
   addToolBar(toolbar);
-  QPushButton *pause_button = new QPushButton("Pause", this);
-  toolbar->addWidget(pause_button);
-  connect(pause_button, &QPushButton::clicked, this, [this, pause_button]() {
-      is_paused_ = !is_paused_;
-      pause_button->setText(is_paused_ ? "Resume" : "Pause");
-  });
   QPushButton *draw_button = new QPushButton("Draw", this);
   toolbar->addWidget(draw_button);
   QPushButton *erase_button = new QPushButton("Erase", this);
@@ -119,17 +79,23 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   QWidget *spacer = new QWidget(this);
   spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   toolbar->addWidget(spacer);
+  QPushButton *open_button = new QPushButton("Open", this);
+  toolbar->addWidget(open_button);
+  connect(open_button, &QPushButton::clicked, this, &MapGenEditor::open_cb);
   QPushButton *save_button = new QPushButton("Save", this);
   toolbar->addWidget(save_button);
-  connect(save_button, &QPushButton::clicked, this, &MapGenLive::save_cb);
+  connect(save_button, &QPushButton::clicked, this, &MapGenEditor::save_cb);
   QPushButton *clear_button = new QPushButton("Clear", this);
   toolbar->addWidget(clear_button);
-  connect(clear_button, &QPushButton::clicked, this, &MapGenLive::clear_cb);
+  connect(clear_button, &QPushButton::clicked, this, &MapGenEditor::clear_cb);
 
   // Color map setup
   vtkNew<vtkLookupTable> lut;
   int num_terrains = terrain_types.size();
   lut->SetNumberOfTableValues(num_terrains);
+  lut->SetTableRange(0, std::max(1, num_terrains - 1));
+  lut->SetBelowRangeColor(0.2, 0.2, 0.2, 1.0);
+  lut->UseBelowRangeColorOn();
   
   auto& color_map = ColorMap::Get();
   
@@ -143,53 +109,16 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   }
   lut->Build();
 
-  // Mesh setup
-  points_ = vtkSmartPointer<vtkPoints>::New();
-  sx_ = param_map_["grid_size_x"].as_double();
-  sy_ = param_map_["grid_size_y"].as_double();
-  res_ = param_map_["grid_resolution"].as_double();
-  nx_ = sx_ / res_;
-  ny_ = sy_ / res_;
-
-  for (int y = 0; y < ny_; ++y) {
-    for (int x = 0; x < nx_; ++x) {
-      points_->InsertNextPoint(x * res_,
-                                y * res_,
-                                0.0);
-    }
-  }
-  vtkNew<vtkCellArray> polys;
-  for (int y = 0; y < ny_ - 1; ++y) {
-    for (int x = 0; x < nx_ - 1; ++x) {
-      vtkIdType pt1 = y * nx_ + x;
-      vtkIdType pt2 = pt1 + 1;
-      vtkIdType pt3 = pt1 + nx_;
-      vtkIdType pt4 = pt3 + 1;
-      polys->InsertNextCell(3);
-      polys->InsertCellPoint(pt1);
-      polys->InsertCellPoint(pt2);
-      polys->InsertCellPoint(pt3);
-      polys->InsertNextCell(3);
-      polys->InsertCellPoint(pt2);
-      polys->InsertCellPoint(pt4);
-      polys->InsertCellPoint(pt3);
-    }
-  }
+  // Initialize terrain map and surface mesh
   surface_mesh_ = vtkSmartPointer<vtkPolyData>::New();
-  surface_mesh_->SetPoints(points_);
-  surface_mesh_->SetPolys(polys);
-  terrain_map_ = vtkSmartPointer<vtkIntArray>::New(); // this holds the terrain/color data
-  terrain_map_->SetNumberOfComponents(1);
-  terrain_map_->SetName("TerrainType");
-  for (int i = 0; i < nx_ * ny_; ++i) {
-    terrain_map_->InsertNextValue(0);
-  }
-  surface_mesh_->GetPointData()->SetScalars(terrain_map_);
+  terrain_map_ = vtkSmartPointer<vtkIntArray>::New();
+  terrain_map_->SetNumberOfValues(1);
+  terrain_map_->SetValue(0, 0);
 
   // Mouse interaction setup
   vtkNew<vtkCallbackCommand> click_callback;
   click_callback->SetClientData(this);
-  click_callback->SetCallback(MapGenLive::click_cb);
+  click_callback->SetCallback(MapGenEditor::click_cb);
   auto* interactor_style = render_window->GetInteractor()->GetInteractorStyle();
   interactor_style->RemoveObservers(vtkCommand::LeftButtonPressEvent);
   interactor_style->RemoveObservers(vtkCommand::LeftButtonReleaseEvent);
@@ -214,185 +143,23 @@ MapGenLive::MapGenLive(rclcpp::Node::SharedPtr node,
   vtk_widget_2d_->setRenderWindow(render_window_2d);
   vtkNew<vtkRenderer> renderer_2d;
   render_window_2d->AddRenderer(renderer_2d);
-  vtkNew<vtkImageData> image_data;
-  image_data->SetDimensions(nx_, ny_, 1);
-  image_data->GetPointData()->SetScalars(terrain_map_);
+  image_data_ = vtkSmartPointer<vtkImageData>::New();
+  image_data_->SetDimensions(nx_, ny_, 1);
+  image_data_->GetPointData()->SetScalars(terrain_map_);
   vtkNew<vtkImageMapToColors> color_mapper;
-  color_mapper->SetInputData(image_data);
+  color_mapper->SetInputData(image_data_);
   color_mapper->SetLookupTable(lut);
-  vtkNew<vtkImageActor> image_actor;
-  image_actor->GetMapper()->SetInputConnection(color_mapper->GetOutputPort());
-  renderer_2d->AddActor(image_actor);
+  image_actor_ = vtkSmartPointer<vtkImageActor>::New();
+  image_actor_->GetMapper()->SetInputConnection(color_mapper->GetOutputPort());
+  renderer_2d->AddActor(image_actor_);
   renderer_2d->ResetCamera();
   vtkNew<vtkInteractorStyle> style_2d;
   render_window_2d->GetInteractor()->SetInteractorStyle(style_2d);
 }
 
-void MapGenLive::pointcloud_cb(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void* client_data, void* call_data)
 {
-  if (is_paused_) {
-    return;
-  }
-  sensor_msgs::msg::PointCloud2 transformed_cloud;
-  if (!param_map_["use_tf"].as_bool()) {
-    RCLCPP_WARN_ONCE(node_->get_logger(), "TF is disabled. Point cloud will not be transformed.");
-    transformed_cloud = *msg;
-  }
-  else {
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    try {
-      transform_stamped = tf_buffer_.lookupTransform(
-          "map", msg->header.frame_id, msg->header.stamp, rclcpp::Duration::from_seconds(0.1));
-    } catch (tf2::TransformException &ex) {
-      RCLCPP_WARN_ONCE(node_->get_logger(), "Could not transform point cloud: %s", ex.what());
-      return;
-    }
-
-    tf2::doTransform(*msg, transformed_cloud, transform_stamped);
-  }
-
-  std::vector<double> z_sums(nx_ * ny_, 0.0);
-  std::vector<int> z_counts(nx_ * ny_, 0);
-
-  sensor_msgs::PointCloud2ConstIterator<float> iter_x(transformed_cloud, "x");
-  sensor_msgs::PointCloud2ConstIterator<float> iter_y(transformed_cloud, "y");
-  sensor_msgs::PointCloud2ConstIterator<float> iter_z(transformed_cloud, "z");
-  for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
-    int x_idx = static_cast<int>((*iter_x) / res_);
-    int y_idx = static_cast<int>((*iter_y) / res_);
-    if (x_idx >= 0 && x_idx < nx_ && y_idx >= 0 && y_idx < ny_) {
-      int idx = y_idx * nx_ + x_idx;
-      z_sums[idx] += *iter_z;
-      ++z_counts[idx];
-    }
-  }
-
-  update_surface_mesh(z_sums, z_counts);
-}
-
-void MapGenLive::depth_image_cb(const sensor_msgs::msg::Image::SharedPtr msg)
-{
-  if (is_paused_ || camera_intrinsics_.empty()) {
-      return;
-  }
-
-  if (msg->encoding != "16UC1" && msg->encoding != "32FC1") {
-    RCLCPP_ERROR(node_->get_logger(), "Unsupported depth image encoding: %s", msg->encoding.c_str());
-    return;
-  }
-
-  tf2::Transform tf2_transform;
-  tf2_transform.setIdentity();
-  if (!param_map_["use_tf"].as_bool()) {
-    RCLCPP_WARN_ONCE(node_->get_logger(), "TF is disabled. Depth image will not be transformed.");
-  }
-  else {
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    try {
-      transform_stamped = tf_buffer_.lookupTransform(
-          "map", msg->header.frame_id, msg->header.stamp, rclcpp::Duration::from_seconds(0.1));
-      tf2::fromMsg(transform_stamped.transform, tf2_transform);
-    } catch (tf2::TransformException &ex) {
-      RCLCPP_WARN_ONCE(node_->get_logger(), "Could not transform depth image: %s", ex.what());
-      return;
-    }
-  }
-
-  std::vector<double> z_sums(nx_ * ny_, 0.0);
-  std::vector<int> z_counts(nx_ * ny_, 0);
-
-  for (size_t v = 0; v < msg->height; ++v) {
-    for (size_t u = 0; u < msg->width; ++u) {
-      float z = 0.0f;
-      if (msg->encoding == "16UC1") {
-        uint16_t depth_raw = *reinterpret_cast<const uint16_t*>(&msg->data[v * msg->step + u * 2]);
-        z = static_cast<float>(depth_raw) / 1000.0; // Convert mm to meters
-      } else if (msg->encoding == "32FC1") {
-        z = *reinterpret_cast<const float*>(&msg->data[v * msg->step + u * 4]);
-      }
-      if (std::isnan(z) || z <= 0.0f) {
-        continue;
-      }
-
-      tf2::Vector3 point_camera((u - camera_intrinsics_[2]) * z / camera_intrinsics_[0],
-                                (v - camera_intrinsics_[5]) * z / camera_intrinsics_[4],
-                                z);
-      tf2::Vector3 point_map = tf2_transform * point_camera;
-
-      int x_idx = static_cast<int>(point_map.x() / res_);
-      int y_idx = static_cast<int>(point_map.y() / res_);
-
-      if (x_idx >= 0 && x_idx < nx_ && y_idx >= 0 && y_idx < ny_) {
-        int idx = y_idx * nx_ + x_idx;
-        z_sums[idx] += point_map.z();
-        ++z_counts[idx];
-      }
-    }
-  }
-  update_surface_mesh(z_sums, z_counts);
-}
-
-void MapGenLive::depth_camera_info_cb(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
-{
-  camera_intrinsics_ = msg->k;
-  RCLCPP_INFO_ONCE(node_->get_logger(), "Received camera intrinsics: fx=%f, fy=%f, cx=%f, cy=%f", camera_intrinsics_[0], camera_intrinsics_[4], camera_intrinsics_[2], camera_intrinsics_[5]);
-}
-
-void MapGenLive::update_surface_mesh(const std::vector<double> &z_sums, const std::vector<int> &z_counts)
-{
-  std::vector<double> z_averages(nx_ * ny_, 0.0);
-  for (int i = 0; i < nx_ * ny_; ++i) {
-    if (z_counts[i] > 0) {
-      z_averages[i] = z_sums[i] / z_counts[i];
-    }
-  }
-
-  for (int y = 0; y < ny_; ++y) {
-    for (int x = 0; x < nx_; ++x) {
-      int idx = y * nx_ + x;
-      if (z_counts[idx] == 0) {
-        double neighbor_sum = 0.0;
-        int neighbor_count = 0;
-        for (int dy = -1; dy <= 1; ++dy) {
-          for (int dx = -1; dx <= 1; ++dx) {
-            if (dx == 0 && dy == 0) continue;
-            int ny_idx = y + dy;
-            int nx_idx = x + dx;
-            if (nx_idx >= 0 && nx_idx < nx_ && ny_idx >= 0 && ny_idx < ny_) {
-              int ni = ny_idx * nx_ + nx_idx;
-              if (z_counts[ni] > 0) {
-                neighbor_sum += z_sums[ni] / z_counts[ni];
-                ++neighbor_count;
-              }
-            }
-          }
-        }
-        if (neighbor_count > 0) {
-          z_averages[idx] = neighbor_sum / neighbor_count;
-        }
-      }
-    }
-  }
-
-  QMetaObject::invokeMethod(this, [this, z_averages]() {
-    for (int y = 0; y < ny_; ++y) {
-      for (int x = 0; x < nx_; ++x) {
-        double point[3];
-        int idx = y * nx_ + x;
-        points_->GetPoint(idx, point);
-        point[2] = z_averages[idx];
-        points_->SetPoint(idx, point);
-      }
-    }
-    points_->Modified();
-    vtk_widget_->renderWindow()->Render();
-    vtk_widget_2d_->renderWindow()->Render();
-  }, Qt::QueuedConnection);
-}
-
-void MapGenLive::click_cb(vtkObject* caller, long unsigned int event_id, void* client_data, void* call_data)
-{
-  auto* self = static_cast<MapGenLive*>(client_data);
+  auto* self = static_cast<MapGenEditor*>(client_data);
   auto* style = vtkInteractorStyle::SafeDownCast(caller);
   auto* interactor = style->GetInteractor();
 
@@ -432,6 +199,7 @@ void MapGenLive::click_cb(vtkObject* caller, long unsigned int event_id, void* c
           }
         }
         self->terrain_map_->Modified();
+        self->image_data_->Modified();
         interactor->GetRenderWindow()->Render();
         self->vtk_widget_2d_->renderWindow()->Render();
       }
@@ -448,7 +216,145 @@ void MapGenLive::click_cb(vtkObject* caller, long unsigned int event_id, void* c
   }
 }
 
-void MapGenLive::save_cb()
+void MapGenEditor::open_cb()
+{
+  // File Dialog
+  QString file_path = QFileDialog::getOpenFileName(this, "Open Mesh File", "", "OBJ Files (*.obj);;All Files (*)");
+  if (file_path.isEmpty()) {
+    return;
+  }
+
+  // Parse file
+  vtkSmartPointer<vtkPolyData> loaded_mesh;
+  if (file_path.endsWith(".obj", Qt::CaseInsensitive)) {
+    vtkNew<vtkOBJReader> reader;
+    reader->SetFileName(file_path.toStdString().c_str());
+    reader->Update();
+    loaded_mesh = reader->GetOutput();
+  }
+  else if (file_path.endsWith(".stl", Qt::CaseInsensitive)) {
+    vtkNew<vtkSTLReader> reader;
+    reader->SetFileName(file_path.toStdString().c_str());
+    reader->Update();
+    loaded_mesh = reader->GetOutput();
+  } 
+  else {
+    QMessageBox::warning(this, "Unsupported File", "The selected file format is not supported.");
+    return;
+  }
+  vtkIdType num_points = loaded_mesh->GetNumberOfPoints();
+  if (num_points == 0) {
+    return;
+  }
+
+  // Sample at fixed distance to make it square shaped
+  double res = param_map_["grid_resolution"].as_double();
+  double bounds[6];
+  loaded_mesh->GetBounds(bounds);
+  double max_dim = std::max({bounds[1] - bounds[0], bounds[3] - bounds[2]});
+  int n = static_cast<int>(std::ceil(max_dim / res)) + 1;
+  nx_ = n;
+  ny_ = n;
+
+  vtkNew<vtkCellLocator> locator;
+  locator->SetDataSet(loaded_mesh);
+  locator->BuildLocator();
+
+  vtkNew<vtkPoints> points;
+  points->SetNumberOfPoints(nx_ * ny_);
+  terrain_map_->SetNumberOfValues(nx_ * ny_);
+  double z_max = bounds[5] + 1.0;
+  double z_min = bounds[4] - 1.0;
+  double x_min = bounds[0];
+  double y_min = bounds[2];
+
+  for (int y = 0; y < ny_; ++y) {
+    double py = y_min + y * res;
+    for (int x = 0; x < nx_; ++x) {
+      double px = x_min + x * res;
+      int idx = y * nx_ + x;
+
+      double p1[3] = {px, py, z_max};
+      double p2[3] = {px, py, z_min};
+      double t = 0.0;
+      double hit[3] = {0.0, 0.0, 0.0};
+      double pcoords[3] = {0.0, 0.0, 0.0};
+      int sub_id = 0;
+      vtkIdType cell_id = -1;
+
+      if (locator->IntersectWithLine(p1, p2, 0.001, t, hit, pcoords, sub_id, cell_id)) {
+        points->SetPoint(idx, px, py, hit[2]);
+        terrain_map_->SetValue(idx, 0); // Default terrain type
+      } else {
+        points->SetPoint(idx, px, py, z_min);
+        terrain_map_->SetValue(idx, -1); // Blocked
+      }
+    }
+  }
+  terrain_map_->Modified();
+
+  // change border vertices to be the same height as surrounding to avoid the robot leaving the map
+  for (int y = 0; y < ny_; ++y) {
+    double py = y_min + y * res;
+    for (int x = 0; x < nx_; ++x) {
+      int idx = y * nx_ + x;
+      if (terrain_map_->GetValue(idx) == -1) {
+        double px = x_min + x * res;
+        double sum_z = 0.0;
+        int count = 0;
+        for (int dy = -1; dy <= 1; ++dy) {
+          int ny = y + dy;
+          if (ny < 0 || ny >= ny_) continue;
+          for (int dx = -1; dx <= 1; ++dx) {
+            int nx = x + dx;
+            if (nx < 0 || nx >= nx_) continue;
+            int n_idx = ny * nx_ + nx;
+            if (terrain_map_->GetValue(n_idx) != -1) {
+              sum_z += points->GetPoint(n_idx)[2];
+              ++count;
+            }
+          }
+        }
+        if (count > 0) {
+          points->SetPoint(idx, px, py, sum_z / count);
+        }
+      }
+    }
+  }
+
+  // generate triangles
+  vtkNew<vtkCellArray> polys;
+  for (int y = 0; y < ny_ - 1; ++y) {
+    for (int x = 0; x < nx_ - 1; ++x) {
+      vtkIdType p0 = y * nx_ + x;
+      vtkIdType p1 = p0 + 1;
+      vtkIdType p2 = p0 + nx_;
+      vtkIdType p3 = p2 + 1;
+      vtkIdType cell_a[3] = {p0, p1, p2};
+      polys->InsertNextCell(3, cell_a);
+      vtkIdType cell_b[3] = {p1, p3, p2};
+      polys->InsertNextCell(3, cell_b);
+    }
+  }
+
+  // update mesh and render
+  surface_mesh_->SetPoints(points);
+  surface_mesh_->SetPolys(polys);
+  surface_mesh_->GetPointData()->SetScalars(terrain_map_);
+  surface_mesh_->Modified();
+
+  image_data_->SetDimensions(nx_, ny_, 1);
+  image_data_->GetPointData()->SetScalars(terrain_map_);
+  image_data_->Modified();
+  image_actor_->SetDisplayExtent(0, nx_ - 1, 0, ny_ - 1, 0, 0);
+
+  vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer()->ResetCamera();
+  vtk_widget_->renderWindow()->Render();
+  vtk_widget_2d_->renderWindow()->GetRenderers()->GetFirstRenderer()->ResetCamera();
+  vtk_widget_2d_->renderWindow()->Render();
+}
+
+void MapGenEditor::save_cb()
 {
   QString dir = QFileDialog::getExistingDirectory(this, "Select Directory to Save Output Files",
                                                   "",
@@ -489,12 +395,16 @@ void MapGenLive::save_cb()
   png_writer->Write();
 }
 
-void MapGenLive::clear_cb()
+void MapGenEditor::clear_cb()
 {
   for (int i = 0; i < nx_ * ny_; ++i) {
-    terrain_map_->SetValue(i, 0);
+    if (terrain_map_->GetValue(i) != -1) // Don't clear blocked cells
+    {
+      terrain_map_->SetValue(i, 0);
+    }
   }
   terrain_map_->Modified();
+  image_data_->Modified();
   vtk_widget_->renderWindow()->Render();
   vtk_widget_2d_->renderWindow()->Render();
 }
@@ -509,7 +419,7 @@ int main(int argc, char **argv)
 
   // Create ros node
   auto node = std::make_shared<rclcpp::Node>("map_gen_live");
-  map_gen::MapGenLive map_gen_live(node);
+  map_gen::MapGenEditor map_gen_live(node);
 
   // Create executor
   rclcpp::experimental::executors::EventsExecutor exec;
