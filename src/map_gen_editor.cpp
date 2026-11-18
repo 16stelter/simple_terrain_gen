@@ -44,20 +44,26 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   // Toolbar setup
   QToolBar *toolbar = new QToolBar(this);
   addToolBar(toolbar);
-  QPushButton *draw_button = new QPushButton("Draw", this);
-  toolbar->addWidget(draw_button);
-  QPushButton *erase_button = new QPushButton("Erase", this);
-  toolbar->addWidget(erase_button);
-  connect(draw_button, &QPushButton::clicked, this, [this, draw_button, erase_button]() {
-    draw_mode_ == 1 ? draw_mode_ = 0 : draw_mode_ = 1;
-    draw_button->setText(draw_mode_ == 1 ? "Stop Drawing" : "Draw");
-    erase_button->setText("Erase");
+  QPushButton *tool_button = new QPushButton("Tool", this);
+  toolbar->addWidget(tool_button);
+  connect(tool_button, &QPushButton::clicked, this, [this, tool_button]() {
+    tool_enabled_ = !tool_enabled_;
+    tool_button->setText(tool_enabled_ ? "Stop Tool" : "Tool"); 
   });
-  connect(erase_button, &QPushButton::clicked, this, [this, erase_button, draw_button]() {
-    draw_mode_ == 2 ? draw_mode_ = 0 : draw_mode_ = 2;
-    erase_button->setText(draw_mode_ == 2 ? "Stop Erasing" : "Erase");
-    draw_button->setText("Draw");
+  QComboBox *tool_dropdown = new QComboBox(this);
+  for (std::string val : terrain_tool_avail_)
+  {
+    tool_dropdown->addItem(QString::fromStdString(val));
+  }
+    for (std::string val : geom_tool_avail_)
+  {
+    tool_dropdown->addItem(QString::fromStdString(val));
+  }
+  toolbar->addWidget(tool_dropdown);
+  connect(tool_dropdown, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+    tool_mode_ = index;
   });
+
   QComboBox *dropdown = new QComboBox(this);
   std::vector<std::string> terrain_types = param_map_["terrain_types"].as_string_array();
   for (std::string val : terrain_types) {
@@ -70,12 +76,24 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   QLabel *brush_label = new QLabel("Brush Size:", this);
   toolbar->addWidget(brush_label);
   QSpinBox *brush_size_spinbox = new QSpinBox(this);
-  brush_size_spinbox->setRange(0, 50);
+  brush_size_spinbox->setRange(0, 1000);
   brush_size_spinbox->setValue(brush_size_);
   toolbar->addWidget(brush_size_spinbox);
   connect(brush_size_spinbox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
     brush_size_ = value;
   });
+  QLabel *intensity_label = new QLabel("Brush Intensity:", this);
+  toolbar->addWidget(intensity_label);
+  QDoubleSpinBox *intensity_spinbox = new QDoubleSpinBox(this);
+  intensity_spinbox->setRange(0.0, 1.0);
+  intensity_spinbox->setDecimals(3);
+  intensity_spinbox->setSingleStep(0.001);
+  intensity_spinbox->setValue(brush_intensity_);
+  toolbar->addWidget(intensity_spinbox);
+  connect(intensity_spinbox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+    brush_intensity_ = value;
+  });
+  
   QWidget *spacer = new QWidget(this);
   spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   toolbar->addWidget(spacer);
@@ -88,7 +106,6 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   QPushButton *clear_button = new QPushButton("Clear", this);
   toolbar->addWidget(clear_button);
   connect(clear_button, &QPushButton::clicked, this, &MapGenEditor::clear_cb);
-
   // Color map setup
   vtkNew<vtkLookupTable> lut;
   int num_terrains = terrain_types.size();
@@ -164,7 +181,7 @@ void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void*
   auto* interactor = style->GetInteractor();
 
   bool handled = false;
-  if (self->draw_mode_ != 0) {
+  if (self->tool_enabled_) {
     if (event_id == vtkCommand::LeftButtonPressEvent) {
       self->is_mousedown_ = true;
       handled = true;
@@ -182,6 +199,7 @@ void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void*
       vtkNew<vtkPointPicker> picker;
       picker->Pick(pos[0], pos[1], 0, self->vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer());
       vtkIdType point_id = picker->GetPointId();
+      std::vector<int> picked_points;
       if (point_id != -1) {
         int cx = point_id % self->nx_;
         int cy = point_id / self->nx_;
@@ -193,11 +211,20 @@ void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void*
               int ny = cy + dy;
               if (nx >= 0 && nx < self->nx_ && ny >= 0 && ny < self->ny_) {
                 int idx = ny * self->nx_ + nx;
-                self->draw_mode_ == 1 ? self->terrain_map_->SetValue(idx, self->draw_type_) : self->terrain_map_->SetValue(idx, 0);
+                picked_points.push_back(idx);
               }
             }
           }
         }
+        if (self->tool_mode_ < self->terrain_tool_avail_.size())
+        {
+          self->edit_terrain(picked_points);
+        }
+        else
+        {
+          self->edit_geometry(picked_points);
+        } 
+
         self->terrain_map_->Modified();
         self->image_data_->Modified();
         interactor->GetRenderWindow()->Render();
@@ -214,6 +241,109 @@ void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void*
       style->OnMouseMove();
     }
   }
+}
+
+void MapGenEditor::edit_terrain(std::vector<int> indices)
+{
+  for (int idx : indices)
+  {
+    auto terrain_value = terrain_map_->GetValue(idx);
+    if (tool_mode_ == 0 && terrain_value != -1) // draw
+    { 
+      terrain_map_->SetValue(idx, draw_type_);
+    }
+    else if (tool_mode_ == 1 && terrain_value != -1) // erase
+    {
+      terrain_map_->SetValue(idx, 0);
+    }
+    else if (tool_mode_ == 2) // block
+    {
+      terrain_map_->SetValue(idx, -1);
+    }
+    else if (tool_mode_ == 3) // unblock
+    {
+      terrain_map_->SetValue(idx, 0); // somehow feels more intuitive to set 0 here instead of actual selected terrain type
+    }
+  }
+}
+
+void MapGenEditor::edit_geometry(std::vector<int> indices)
+{
+  vtkPoints* points = surface_mesh_->GetPoints();
+  size_t geom_mode = tool_mode_ - terrain_tool_avail_.size(); 
+  
+  if (geom_mode == 0) // push
+  {
+    for (int idx : indices)
+    {
+      double pt[3];
+      points->GetPoint(idx, pt);
+      pt[2] -= brush_intensity_;
+      points->SetPoint(idx, pt);
+    }
+  }
+  else if (geom_mode == 1) // pull
+  {
+    for (int idx : indices)
+    {
+      double pt[3];
+      points->GetPoint(idx, pt);
+      pt[2] += brush_intensity_;
+      points->SetPoint(idx, pt);
+    }
+  }
+  else if (geom_mode == 2) // flatten
+  {
+    std::vector<double> new_z(indices.size());
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+      int idx = indices[i];
+      bool is_blocked = terrain_map_->GetValue(idx) == -1;
+      double pt[3];
+      points->GetPoint(idx, pt);
+      int cx = idx % nx_;
+      int cy = idx / nx_;
+      double sum_z = 0.0;
+      int count = 0;
+      for (int dy = -1; dy <= 1; ++dy)
+      {
+        int ny = cy + dy;
+        if (ny < 0 || ny >= ny_) continue;
+        for(int dx = -1; dx <= 1; ++dx)
+        {
+          if (dx == 0 && dy == 0) continue;
+          int nx = cx + dx;
+          if (nx < 0 || nx >= nx_) continue;
+          int n_idx = ny * nx_ + nx;
+          // blocked vertices consider blocked neighbours otherwise they never move
+          if (is_blocked || terrain_map_->GetValue(n_idx) != -1)
+          {
+            double n_pt[3];
+            points->GetPoint(n_idx, n_pt);
+            sum_z += n_pt[2];
+            ++count;
+          }
+        }
+      }
+      if (count > 0)
+      {
+        new_z[i] = pt[2] + ((sum_z / count) - pt[2]) * brush_intensity_;
+      }
+      else
+      {
+        new_z[i] = pt[2];
+      }
+    }
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+      double pt[3];
+      points->GetPoint(indices[i], pt);
+      pt[2] = new_z[i];
+      points->SetPoint(indices[i], pt);
+    }
+  }
+  points->Modified();
+  surface_mesh_->Modified();
 }
 
 void MapGenEditor::open_cb()

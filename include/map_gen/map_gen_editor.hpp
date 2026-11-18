@@ -11,6 +11,7 @@
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QSpinBox>
+#include <QtWidgets/QDoubleSpinBox>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QWidget>
@@ -57,7 +58,6 @@ class MapGenEditor : public QMainWindow {
     private:
         rclcpp::Node::SharedPtr node_;
         std::unordered_map<std::string, rclcpp::Parameter> param_map_;
-        vtkSmartPointer<vtkPoints> points_;
 
         QVTKOpenGLNativeWidget *vtk_widget_;
         QVTKOpenGLNativeWidget *vtk_widget_2d_;
@@ -65,9 +65,13 @@ class MapGenEditor : public QMainWindow {
         int nx_;
         int ny_;
 
-        int draw_mode_ = 0; // 0: off, 1: draw, 2: erase
+        std::vector<std::string> terrain_tool_avail_ = {"draw", "erase", "block", "unblock"};
+        std::vector<std::string> geom_tool_avail_ = {"push", "pull", "flatten"};
+        size_t tool_mode_ = 0;
+        bool tool_enabled_ = false;
         int draw_type_ = 0;
         int brush_size_ = 1;
+        double brush_intensity_ = 0.001;
         bool is_mousedown_ = false;
 
         vtkSmartPointer<vtkIntArray> terrain_map_;
@@ -78,6 +82,10 @@ class MapGenEditor : public QMainWindow {
         void update_surface_mesh(const std::vector<double> &z_sums, const std::vector<int> &z_counts);
 
         static void click_cb(vtkObject* caller, long unsigned int event_id, void* client_data, void* call_data);
+
+        void edit_terrain(std::vector<int> indices);
+
+        void edit_geometry(std::vector<int> indices);
 
         void open_cb();
 
