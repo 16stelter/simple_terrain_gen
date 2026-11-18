@@ -100,6 +100,9 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   QPushButton *open_button = new QPushButton("Open", this);
   toolbar->addWidget(open_button);
   connect(open_button, &QPushButton::clicked, this, &MapGenEditor::open_cb);
+  QPushButton *open_terrain_button = new QPushButton("Open Terrain", this);
+  toolbar->addWidget(open_terrain_button);
+  connect(open_terrain_button, &QPushButton::clicked, this, &MapGenEditor::open_terrain_cb);
   QPushButton *save_button = new QPushButton("Save", this);
   toolbar->addWidget(save_button);
   connect(save_button, &QPushButton::clicked, this, &MapGenEditor::save_cb);
@@ -256,20 +259,16 @@ void MapGenEditor::edit_terrain(std::vector<int> indices)
   for (int idx : indices)
   {
     auto terrain_value = terrain_map_->GetValue(idx);
-    if (tool_mode_ == 0 && terrain_value != -1) // draw
-    { 
+    if (tool_mode_ == 0 && terrain_value != -1) { // draw 
       terrain_map_->SetValue(idx, draw_type_);
     }
-    else if (tool_mode_ == 1 && terrain_value != -1) // erase
-    {
+    else if (tool_mode_ == 1 && terrain_value != -1) { // erase
       terrain_map_->SetValue(idx, 0);
     }
-    else if (tool_mode_ == 2) // block
-    {
+    else if (tool_mode_ == 2) { // block
       terrain_map_->SetValue(idx, -1);
     }
-    else if (tool_mode_ == 3) // unblock
-    {
+    else if (tool_mode_ == 3) { // unblock
       terrain_map_->SetValue(idx, 0); // somehow feels more intuitive to set 0 here instead of actual selected terrain type
     }
   }
@@ -280,31 +279,25 @@ void MapGenEditor::edit_geometry(std::vector<int> indices)
   vtkPoints* points = surface_mesh_->GetPoints();
   size_t geom_mode = tool_mode_ - terrain_tool_avail_.size(); 
   
-  if (geom_mode == 0) // push
-  {
-    for (int idx : indices)
-    {
+  if (geom_mode == 0) { // push
+    for (int idx : indices) {
       double pt[3];
       points->GetPoint(idx, pt);
       pt[2] -= brush_intensity_;
       points->SetPoint(idx, pt);
     }
   }
-  else if (geom_mode == 1) // pull
-  {
-    for (int idx : indices)
-    {
+  else if (geom_mode == 1) { // pull
+    for (int idx : indices) {
       double pt[3];
       points->GetPoint(idx, pt);
       pt[2] += brush_intensity_;
       points->SetPoint(idx, pt);
     }
   }
-  else if (geom_mode == 2) // flatten
-  {
+  else if (geom_mode == 2) { // flatten
     std::vector<double> new_z(indices.size());
-    for (size_t i = 0; i < indices.size(); ++i)
-    {
+    for (size_t i = 0; i < indices.size(); ++i) {
       int idx = indices[i];
       bool is_blocked = terrain_map_->GetValue(idx) == -1;
       double pt[3];
@@ -313,19 +306,16 @@ void MapGenEditor::edit_geometry(std::vector<int> indices)
       int cy = idx / nx_;
       double sum_z = 0.0;
       int count = 0;
-      for (int dy = -1; dy <= 1; ++dy)
-      {
+      for (int dy = -1; dy <= 1; ++dy) {
         int ny = cy + dy;
         if (ny < 0 || ny >= ny_) continue;
-        for(int dx = -1; dx <= 1; ++dx)
-        {
+        for(int dx = -1; dx <= 1; ++dx) {
           if (dx == 0 && dy == 0) continue;
           int nx = cx + dx;
           if (nx < 0 || nx >= nx_) continue;
           int n_idx = ny * nx_ + nx;
           // blocked vertices consider blocked neighbours otherwise they never move
-          if (is_blocked || terrain_map_->GetValue(n_idx) != -1)
-          {
+          if (is_blocked || terrain_map_->GetValue(n_idx) != -1) {
             double n_pt[3];
             points->GetPoint(n_idx, n_pt);
             sum_z += n_pt[2];
@@ -333,17 +323,14 @@ void MapGenEditor::edit_geometry(std::vector<int> indices)
           }
         }
       }
-      if (count > 0)
-      {
+      if (count > 0) {
         new_z[i] = pt[2] + ((sum_z / count) - pt[2]) * brush_intensity_;
       }
-      else
-      {
+      else {
         new_z[i] = pt[2];
       }
     }
-    for (size_t i = 0; i < indices.size(); ++i)
-    {
+    for (size_t i = 0; i < indices.size(); ++i) {
       double pt[3];
       points->GetPoint(indices[i], pt);
       pt[2] = new_z[i];
@@ -357,7 +344,7 @@ void MapGenEditor::edit_geometry(std::vector<int> indices)
 void MapGenEditor::open_cb()
 {
   // File Dialog
-  QString file_path = QFileDialog::getOpenFileName(this, "Open Mesh File", "", "OBJ Files (*.obj);;All Files (*)");
+  QString file_path = QFileDialog::getOpenFileName(this, "Open Mesh File", "", "Mesh Files (*.obj *.stl);;All Files (*)");
   if (file_path.isEmpty()) {
     return;
   }
@@ -489,6 +476,87 @@ void MapGenEditor::open_cb()
   vtk_widget_->renderWindow()->GetRenderers()->GetFirstRenderer()->ResetCamera();
   vtk_widget_->renderWindow()->Render();
   vtk_widget_2d_->renderWindow()->GetRenderers()->GetFirstRenderer()->ResetCamera();
+  vtk_widget_2d_->renderWindow()->Render();
+}
+
+void MapGenEditor::open_terrain_cb()
+{
+  QString file_path = QFileDialog::getOpenFileName(this, "Open Terrain YAML", "", "YAML Files (*.yaml *.yml);;All Files (*)");
+  if (file_path.isEmpty()) {
+    return;
+  }
+
+  std::ifstream file(file_path.toStdString());
+  if (!file.is_open()) {
+    QMessageBox::warning(this, "Error", "Failed to open terrain YAML file.");
+    return;
+  }
+
+  std::vector<std::vector<int>> loaded_grid;
+  std::string line;
+  bool in_terrain = false;
+
+  while (std::getline(file, line)) {
+    size_t start = line.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos || line[start] == '#') {
+      continue;
+    }
+
+    if (line.find("terrain:") != std::string::npos) {
+      in_terrain = true;
+      continue;
+    }
+
+    if (in_terrain) {
+      size_t lbracket = line.find('[');
+      size_t rbracket = line.find(']');
+      if (lbracket != std::string::npos && rbracket != std::string::npos && rbracket > lbracket) {
+        std::string row_str = line.substr(lbracket + 1, rbracket - lbracket - 1);
+        std::vector<int> row;
+        std::stringstream ss(row_str);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+          try {
+            row.push_back(std::stoi(item));
+          } catch (...) {
+            row.push_back(0);
+          }
+        }
+        if (!row.empty()) {
+          loaded_grid.push_back(row);
+        }
+      } else if (line[start] != '-') {
+        break;
+      }
+    }
+  }
+
+  if (loaded_grid.empty() || loaded_grid[0].empty()) {
+    QMessageBox::warning(this, "Invalid File", "No valid terrain grid found in YAML.");
+    return;
+  }
+
+  int src_ny = static_cast<int>(loaded_grid.size());
+  int src_nx = static_cast<int>(loaded_grid[0].size());
+
+  for (int y = 0; y < ny_; ++y) {
+    int src_y = (ny_ > 1) ? static_cast<int>(std::round(static_cast<double>(y) * (src_ny - 1) / (ny_ - 1))) : 0;
+    src_y = std::clamp(src_y, 0, src_ny - 1);
+
+    for (int x = 0; x < nx_; ++x) {
+      int idx = y * nx_ + x;
+      int src_x = (nx_ > 1) ? static_cast<int>(std::round(static_cast<double>(x) * (src_nx - 1) / (nx_ - 1))) : 0;
+      src_x = std::clamp(src_x, 0, static_cast<int>(loaded_grid[src_y].size()) - 1);
+
+      terrain_map_->SetValue(idx, loaded_grid[src_y][src_x]);
+    }
+  }
+
+  terrain_map_->Modified();
+  surface_mesh_->Modified();
+  image_data_->Modified();
+
+  vtk_widget_->renderWindow()->Render();
   vtk_widget_2d_->renderWindow()->Render();
 }
 
