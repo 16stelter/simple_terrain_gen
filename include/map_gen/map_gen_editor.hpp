@@ -93,6 +93,8 @@ class MapGenEditor : public QMainWindow {
 
         void open_cb();
 
+        void open_terrain_cb();
+
         void save_cb();
 
         void clear_cb();
