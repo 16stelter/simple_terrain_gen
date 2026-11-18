@@ -1,0 +1,16 @@
+int32 size
+int32 terrain_types_count
+int32 seed
+int32 octaves
+float32 frequency
+float32 persistence
+float32 lacunarity
+string noise_type
+bool stretch
+string file_path
+
+---
+
+bool success
+
+

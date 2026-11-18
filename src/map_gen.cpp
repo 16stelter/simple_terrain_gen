@@ -247,8 +247,8 @@ void MapGen::generate_map(const std::shared_ptr<map_gen::srv::GenerateMap::Reque
   else
   {
     std::filesystem::path file(request->file_path);
+    std::ofstream output(file.replace_extension(".stl"));
     std::ofstream output_steep(file.replace_extension(".steep.stl"));
-    std::ofstream output(request->file_path);
 
     CGAL::IO::write_STL(output, mesh);
     CGAL::IO::write_STL(output_steep, steep_mesh);
