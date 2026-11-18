@@ -337,6 +337,14 @@ void MapGenEditor::edit_geometry(std::vector<int> indices)
       points->SetPoint(indices[i], pt);
     }
   }
+  else if (geom_mode == 3) { // get_coord
+    if (!indices.empty()) {
+      double pt[3];
+      points->GetPoint(indices[0], pt);
+      QMessageBox::information(this, "Coordinate", QString("X: %1, Y: %2, Z: %3").arg(pt[0]).arg(pt[1]).arg(pt[2]));
+      is_mousedown_ = false;
+    }
+  }
   points->Modified();
   surface_mesh_->Modified();
 }
@@ -408,10 +416,10 @@ void MapGenEditor::open_cb()
       vtkIdType cell_id = -1;
 
       if (locator->IntersectWithLine(p1, p2, 0.001, t, hit, pcoords, sub_id, cell_id)) {
-        points->SetPoint(idx, px, py, hit[2]);
+        points->SetPoint(idx, px - x_min, py - y_min, hit[2]);
         terrain_map_->SetValue(idx, 0); // Default terrain type
       } else {
-        points->SetPoint(idx, px, py, z_min);
+        points->SetPoint(idx, px - x_min, py - y_min, z_min);
         terrain_map_->SetValue(idx, -1); // Blocked
       }
     }
@@ -441,7 +449,7 @@ void MapGenEditor::open_cb()
           }
         }
         if (count > 0) {
-          points->SetPoint(idx, px, py, sum_z / count);
+          points->SetPoint(idx, px - x_min, py - y_min, sum_z / count);
         }
       }
     }

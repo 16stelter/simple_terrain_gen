@@ -70,7 +70,7 @@ class MapGenEditor : public QMainWindow {
         int ny_;
 
         std::vector<std::string> terrain_tool_avail_ = {"draw", "erase", "block", "unblock"};
-        std::vector<std::string> geom_tool_avail_ = {"push", "pull", "flatten"};
+        std::vector<std::string> geom_tool_avail_ = {"push", "pull", "flatten", "get_coord"};
         size_t tool_mode_ = 0;
         bool tool_enabled_ = false;
         int draw_type_ = 0;
