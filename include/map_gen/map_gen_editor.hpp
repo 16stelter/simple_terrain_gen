@@ -19,6 +19,10 @@
 #include <QVTKOpenGLNativeWidget.h>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QScreen>
+#include <QGuiApplication>
 
 #include <vtkActor.h>
 #include <vtkRenderer.h>

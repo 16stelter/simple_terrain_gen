@@ -22,7 +22,7 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   }
 
   // Qt and VTK setup
-  resize(800, 600);
+  resize(QGuiApplication::primaryScreen()->availableGeometry().size());
   setWindowTitle("MapGen Editor");
   QWidget *central_widget = new QWidget(this);
   setCentralWidget(central_widget);
@@ -106,6 +106,7 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
   QPushButton *clear_button = new QPushButton("Clear", this);
   toolbar->addWidget(clear_button);
   connect(clear_button, &QPushButton::clicked, this, &MapGenEditor::clear_cb);
+
   // Color map setup
   vtkNew<vtkLookupTable> lut;
   int num_terrains = terrain_types.size();
@@ -125,6 +126,13 @@ MapGenEditor::MapGenEditor(rclcpp::Node::SharedPtr node,
     }
   }
   lut->Build();
+
+  // Keyboard Shortcuts
+  QShortcut *disable_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+  connect(disable_shortcut, &QShortcut::activated, this, [this, tool_button]() {
+    tool_enabled_ = false;
+    tool_button->setText(tool_enabled_ ? "Stop Tool" : "Tool");
+  });
 
   // Initialize terrain map and surface mesh
   surface_mesh_ = vtkSmartPointer<vtkPolyData>::New();
@@ -182,11 +190,11 @@ void MapGenEditor::click_cb(vtkObject* caller, long unsigned int event_id, void*
 
   bool handled = false;
   if (self->tool_enabled_) {
-    if (event_id == vtkCommand::LeftButtonPressEvent) {
+    if (event_id == vtkCommand::LeftButtonPressEvent && !interactor->GetShiftKey()) {
       self->is_mousedown_ = true;
       handled = true;
     }
-    else if (event_id == vtkCommand::LeftButtonReleaseEvent) {
+    else if (event_id == vtkCommand::LeftButtonReleaseEvent && self->is_mousedown_) {
       self->is_mousedown_ = false;
       handled = true;
     }
