@@ -9,8 +9,6 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()  
 
-set(CGAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources/CGAL-6.0")
-
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
@@ -119,7 +117,6 @@ install(
 
 install(
     DIRECTORY
-        resources
         config
         launch
     DESTINATION share/${PROJECT_NAME}

@@ -9,7 +9,7 @@
     sync_queue_size:                  10
     odom_tf_linear_variance:          0.005
     odom_tf_angular_variance:         0.005
-    RGBD/NeighborLinkRefining:       'true'
+    RGBD/NeighborLinkRefining:       'false'
     RGBD/ProximityBySpace:           'true'
     RGBD/ProximityByTime:            'false'
     RGBD/AngularUpdate:               '0.1'
@@ -22,6 +22,7 @@
     Icp/Iterations:                  '10'
     Vis/MaxFeatures:                 '1000'
     Vis/MinInliers:                  '15'
+    Vis/FeatureType:                 '1'
     RGBD/OptimizeFromGraphEnd:       'false'
     RGBD/OptimizeMaxError:           '2.0'
     Reg/Force3DoF:                   'false'
@@ -32,5 +33,7 @@
     Grid/CellSize:                   '0.02'
     Grid/NoiseFilteringRadius:       '0.05'
     Grid/NoiseFilteringMinNeighbors: '5'
+    Grid/RayTracing:                 'true'
     Rtabmap/DetectionRate:           '2'
     Kp/MaxFeatures:                  '500'
+    GFTT/MinDistance:                '1'
