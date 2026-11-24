@@ -8,6 +8,7 @@ float32 lacunarity
 string noise_type
 bool stretch
 string file_path
+bool generate_blocked_terrain
 
 ---
 

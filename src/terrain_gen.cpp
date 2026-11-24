@@ -59,6 +59,8 @@ void TerrainGen::generate_terrain(const std::shared_ptr<map_gen::srv::GenerateTe
 
   // Normalize
   std::vector<std::vector<int>> terrain_map(request->size, std::vector<int>(request->size, 0));
+  int min_terrain_type = request->generate_blocked_terrain ? -1 : 0; 
+  int total_terrain_types = request->terrain_types_count - min_terrain_type; 
   if (request->stretch)
   {
     float min_value = std::numeric_limits<float>::max();
@@ -82,7 +84,7 @@ void TerrainGen::generate_terrain(const std::shared_ptr<map_gen::srv::GenerateTe
     {
       for (int x = 0; x < request->size; x++)
       {
-        terrain_map[y][x] = std::min(static_cast<int>(((noise_map[y][x] - min_value) / (max_value - min_value)) * request->terrain_types_count), request->terrain_types_count - 1);
+        terrain_map[y][x] = std::min(static_cast<int>(((noise_map[y][x] - min_value) / (max_value - min_value)) * total_terrain_types) + min_terrain_type, request->terrain_types_count - 1);
       }
     }
   }
@@ -92,7 +94,7 @@ void TerrainGen::generate_terrain(const std::shared_ptr<map_gen::srv::GenerateTe
     {
       for (int x = 0; x < request->size; x++)
       {
-        terrain_map[y][x] = std::min(static_cast<int>(((noise_map[y][x] + 1.0f) / 2.0f) * request->terrain_types_count), request->terrain_types_count - 1);
+        terrain_map[y][x] = std::min(static_cast<int>(((noise_map[y][x] + 1.0f) / 2.0f) * total_terrain_types) + min_terrain_type, request->terrain_types_count - 1);
       }
     }
   }
@@ -110,10 +112,14 @@ void TerrainGen::generate_terrain(const std::shared_ptr<map_gen::srv::GenerateTe
       int terrain_type = terrain_map[y][x];
       out << terrain_type;
       std::array<uint8_t, 3> color;
-      if (terrain_type < 0 || static_cast<std::size_t>(terrain_type) >= color_map_.size())
+      if (request->generate_blocked_terrain && terrain_type == -1)
+      {
+        color = {26, 26, 26}; // grey for blocked terrain
+      }
+      else if (terrain_type < 0 || static_cast<std::size_t>(terrain_type) >= color_map_.size())
       {
         RCLCPP_WARN_ONCE(node_->get_logger(), "Terrain type %d is out of bounds. Using default color.", terrain_type);
-        color = {0, 0, 0}; // Default to white
+        color = {0, 0, 0}; // default to black if out of bounds
       }
       else
       {
